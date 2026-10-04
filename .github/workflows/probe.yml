@@ -52,14 +52,19 @@ jobs:
 
       - name: Annotate the findings
         if: always()
-        # The human-readable section only, before the JSON dump: annotations are
-        # capped and the one-line-per-probe summary is what matters.
+        # One annotation carrying the whole report, newlines encoded as %0A.
+        # GitHub caps the NUMBER of annotations per check run at ten, not their
+        # length, so a single multi-line annotation is the reliable way to get a
+        # full report out when job logs and artifact downloads are unreachable.
         run: |
           if [ -f runs/probe.log ]; then
-            sed -n '1,/=== JSON ===/p' runs/probe.log | head -n 45 | while IFS= read -r line; do
-              clean=$(printf '%s' "$line" | tr -d '\r' | sed 's/%/%25/g')
-              [ -n "$clean" ] && echo "::error::${clean}"
-            done
+            payload=$(sed -n '1,/=== JSON ===/p' runs/probe.log \
+              | sed 's/%/%25/g' \
+              | sed 's/\r//' \
+              | awk '{printf "%s%%0A", $0}')
+            echo "::error title=ChEMBL probe::${payload}"
+          else
+            echo "::error::the probe produced no output"
           fi
 
       - name: Upload the full report
