@@ -13,8 +13,9 @@ auditable after the fact: every dropped measurement can say why it was dropped.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Any, Sequence
+from typing import Any
 
 from ..provenance import Quantity
 

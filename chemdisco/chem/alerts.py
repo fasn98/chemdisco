@@ -36,9 +36,9 @@ from __future__ import annotations
 
 import os
 import sys
+from collections.abc import Sequence
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import Sequence
 
 from ..provenance import Quantity
 from .standardize import RDKIT_AVAILABLE, require_rdkit
@@ -140,7 +140,7 @@ class AlertReport:
 
 
 @lru_cache(maxsize=1)
-def _catalogues() -> dict[str, "FilterCatalog.FilterCatalog"]:
+def _catalogues() -> dict[str, FilterCatalog.FilterCatalog]:
     """Build the filter catalogues once; construction is expensive."""
     require_rdkit()
     built: dict[str, FilterCatalog.FilterCatalog] = {}

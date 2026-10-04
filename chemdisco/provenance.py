@@ -27,9 +27,10 @@ Design rules enforced here:
 from __future__ import annotations
 
 import math
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field, replace
 from enum import Enum
-from typing import Any, Callable, Iterable, Sequence
+from typing import Any
 
 
 class Origin(Enum):
@@ -170,7 +171,7 @@ class Quantity:
         *,
         uncertainty: float | None = None,
         notes: Sequence[str] = (),
-    ) -> "Quantity":
+    ) -> Quantity:
         return cls(
             value=value,
             unit=unit,
@@ -189,7 +190,7 @@ class Quantity:
         *,
         uncertainty: float | None = None,
         notes: Sequence[str] = (),
-    ) -> "Quantity":
+    ) -> Quantity:
         return cls(
             value=value,
             unit=unit,
@@ -209,7 +210,7 @@ class Quantity:
         uncertainty: float | None = None,
         in_domain: bool | None = None,
         notes: Sequence[str] = (),
-    ) -> "Quantity":
+    ) -> Quantity:
         return cls(
             value=value,
             unit=unit,
@@ -228,7 +229,7 @@ class Quantity:
         rule: str,
         *,
         notes: Sequence[str] = (),
-    ) -> "Quantity":
+    ) -> Quantity:
         return cls(
             value=value,
             unit=unit,
@@ -240,7 +241,7 @@ class Quantity:
     @classmethod
     def unknown(
         cls, unit: str | None, reason: str, *, origin: Origin = Origin.DERIVED
-    ) -> "Quantity":
+    ) -> Quantity:
         """An explicit, documented absence.
 
         This is the correct return value when a calculation fails. The
@@ -305,7 +306,7 @@ class Quantity:
         source: str,
         origin: Origin | None = None,
         notes: Sequence[str] = (),
-    ) -> "Quantity":
+    ) -> Quantity:
         """Apply ``func`` to the value, carrying provenance forward.
 
         An unknown quantity maps to an unknown quantity: ``func`` is never
@@ -332,7 +333,7 @@ class Quantity:
             notes=combined_notes,
         )
 
-    def with_notes(self, *notes: str) -> "Quantity":
+    def with_notes(self, *notes: str) -> Quantity:
         return replace(self, notes=tuple(self.notes) + notes)
 
     # -- rendering -------------------------------------------------------
@@ -374,7 +375,7 @@ class Quantity:
         }
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> "Quantity":
+    def from_dict(cls, payload: dict[str, Any]) -> Quantity:
         return cls(
             value=payload.get("value"),
             unit=payload.get("unit"),

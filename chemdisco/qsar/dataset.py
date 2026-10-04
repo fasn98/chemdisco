@@ -28,8 +28,8 @@ rather than an accident.
 
 from __future__ import annotations
 
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Callable, Sequence
 
 import numpy as np
 
@@ -145,7 +145,7 @@ class TrainingSet:
     def n_features(self) -> int:
         return int(self.X.shape[1])
 
-    def subset(self, indices: Sequence[int]) -> "TrainingSet":
+    def subset(self, indices: Sequence[int]) -> TrainingSet:
         """Take a partition, keeping every parallel array aligned.
 
         Splitting by hand is where index-alignment bugs appear, and a misaligned

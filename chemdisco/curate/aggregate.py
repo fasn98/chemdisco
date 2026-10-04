@@ -26,8 +26,8 @@ from __future__ import annotations
 
 import statistics
 from collections import defaultdict
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
-from typing import Callable, Iterable, Sequence
 
 from ..provenance import Origin, Quantity
 from .records import ActivityRecord, CuratedPoint, CurationReport, Rejection

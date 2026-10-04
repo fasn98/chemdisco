@@ -30,8 +30,9 @@ import json
 import logging
 import pathlib
 import time
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
-from typing import Any, Iterable, Sequence
+from typing import Any
 from urllib.parse import urlencode
 
 from ..curate.records import ActivityRecord

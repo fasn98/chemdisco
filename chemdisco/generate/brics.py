@@ -40,8 +40,8 @@ something important about the fragment set.
 from __future__ import annotations
 
 import random
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass, field
-from typing import Iterator, Sequence
 
 from ..chem.alerts import AlertReport, screen_alerts, synthetic_accessibility
 from ..chem.similarity import NoveltyVerdict, assess_novelty, diverse_subset
@@ -441,7 +441,7 @@ def generate_candidates(
         near_duplicate_threshold=policy.near_duplicate_threshold,
     )
     with_novelty: list[Candidate] = []
-    for candidate, verdict in zip(survivors, novelty_verdicts):
+    for candidate, verdict in zip(survivors, novelty_verdicts, strict=True):
         if policy.require_novelty and not verdict.is_novel:
             report.record("too similar to known chemistry")
             continue
@@ -530,6 +530,6 @@ def score_candidates(
             predicted_activity=prediction,
             parent_fragments=candidate.parent_fragments,
         )
-        for candidate, prediction in zip(report.candidates, predictions)
+        for candidate, prediction in zip(report.candidates, predictions, strict=True)
     ]
     return report

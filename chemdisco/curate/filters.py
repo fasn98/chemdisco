@@ -48,8 +48,8 @@ Activity-type mixing
 
 from __future__ import annotations
 
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
-from typing import Callable, Iterable, Sequence
 
 from ..units import pactivity
 from .records import ActivityRecord, Rejection

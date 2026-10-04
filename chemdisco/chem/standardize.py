@@ -33,9 +33,9 @@ without it.
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import Iterable, Sequence
 
 from ..provenance import Quantity
 

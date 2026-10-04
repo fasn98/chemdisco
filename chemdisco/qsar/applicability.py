@@ -213,7 +213,7 @@ class ApplicabilityDomain:
         knn_percentile: float = 95.0,
         similarity_floor: float = 0.3,
         use_leverage: bool = True,
-    ) -> "ApplicabilityDomain":
+    ) -> ApplicabilityDomain:
         X = np.asarray(train_features, dtype=float)
         return cls(
             train_features=X,

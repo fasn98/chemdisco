@@ -19,8 +19,8 @@ chemotypes or merely for interpolating within known ones.
 from __future__ import annotations
 
 import random
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
-from typing import Callable, Sequence
 
 import numpy as np
 

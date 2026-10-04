@@ -17,8 +17,9 @@ is recorded in the quantity's notes rather than left for the reader to assume.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Any, Literal, Sequence
+from typing import Any, Literal
 
 import numpy as np
 from sklearn.ensemble import GradientBoostingRegressor, RandomForestRegressor
@@ -120,7 +121,7 @@ class QSARModel:
         feature_names: Sequence[str] | None = None,
         fit_domain: bool = True,
         **estimator_overrides: Any,
-    ) -> "QSARModel":
+    ) -> QSARModel:
         """Fit the estimator and the applicability domain together.
 
         The domain is fitted from the same training matrix, in the same call, so
@@ -299,7 +300,12 @@ class QSARModel:
         importances = getattr(self._estimator, "feature_importances_", None)
         if importances is None:
             return None
-        paired = dict(zip(self.feature_names, (float(v) for v in importances)))
+        # strict=True is a real assertion here: a length mismatch between the
+        # stored feature names and the estimator's importances would silently
+        # mislabel which descriptor matters.
+        paired = dict(
+            zip(self.feature_names, (float(v) for v in importances), strict=True)
+        )
         return dict(sorted(paired.items(), key=lambda kv: -kv[1]))
 
     def metadata(self) -> dict[str, Any]:

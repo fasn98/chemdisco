@@ -28,8 +28,8 @@ string. That is handled explicitly by the splitter rather than papered over here
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from functools import lru_cache
-from typing import Sequence
 
 from .standardize import RDKIT_AVAILABLE, require_rdkit
 

@@ -21,8 +21,8 @@ on ECFP4 at 2048 bits is not the same as 0.5 on a MACCS key.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Sequence
 
 import numpy as np
 
@@ -83,7 +83,7 @@ def similarity_matrix(
         if query_fp is None:
             continue
         similarities = DataStructs.BulkTanimotoSimilarity(query_fp, usable_reference)
-        for position, value in zip(reference_positions, similarities):
+        for position, value in zip(reference_positions, similarities, strict=True):
             matrix[row, position] = float(value)
     return matrix
 
