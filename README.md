@@ -310,33 +310,55 @@ shortlist — or, as often, a reasoned empty one. On BACE1 against 4FRS, roughly
 50 CPU-minutes across six shards:
 
 ```
-47 candidates docked alongside 30 reference actives, one receptor, one box
-22 reach the reference median ligand efficiency (-0.260 kcal/mol/atom)
-15 of those retain no discriminating feature and are set aside
- 4 carry the anchoring motif twice: two inhibitors glued end to end
- 3 on the shortlist, 18-24 heavy atoms, SAscore 3.6-3.7,
-   Tanimoto 0.35-0.49 to the nearest known compound, all carrying an amidine
+60 candidates docked alongside 30 reference actives, one receptor, one box
+   all six shards reporting ligand signature f530b99d98df82f6
+15 reach the reference median ligand efficiency (-0.260 kcal/mol/atom)
+15 of those carry the anchoring motif TWICE: two inhibitors glued end to end
+ 0 on the shortlist
 ```
 
-That is run 37223489128, the first with the conserved-feature check actually
-applied rather than withheld. It is not a gentle filter: 15 of 22 candidates that
-occupy the site as efficiently as a median known inhibitor carry nothing that
-could engage the catalytic dyad, and a docking score cannot see the difference.
+Run 37230653219, and the first run of this pipeline that is actually one
+experiment — see below. The result is an empty shortlist, and that is the finding
+rather than a failure to produce one. Every candidate that occupies the site as
+efficiently as a median known inhibitor turns out to carry two amidines: in this
+fragment space, joining two potent BACE1 inhibitors is how you get a compact,
+efficient-looking molecule. The response is more fragments or a different
+generator, not a looser filter.
 
-**An earlier run of the same pipeline, same seed, docked 48 candidates and passed
-12 of them.** Vina is seeded and curation sorts its output by compound identifier,
-so neither the docking nor the ranking explains a swing from 25% to 47%. The cause
-is not yet established, and saying so is more useful than a plausible story: each
-shard now records a hash of the ligand list it derived, and the combine step
-refuses to pool shards that disagree. That instrument did not exist for either run.
+### The shards were never docking the same list
 
-**The shortlist carries no potency prediction.** Generated candidates sit outside
-the QSAR model's applicability domain almost by construction: the reason to
-generate them is that they are new, which is exactly where the model has no basis
-to predict. Attaching an IC50 would be inventing a number. It is a shortlist worth
-a chemist's hour, not a result.
+Two runs with the same seed had docked 48 and 47 candidates, passing 12 and 22 of
+them. Vina is seeded, so that should not happen. The ligand-signature check added
+to find out produced the answer in one pair of runs: **identical curation
+signatures** (`da70584f5064c941`, 5091 compounds, 572 actives) and **six different
+ligand signatures within a single run.**
 
-### Five method errors this run produced
+`BRICS.BRICSBuild(scrambleReagents=True)` shuffles its reagents using the `random`
+module's *global* state, not any generator passed to it. The private
+`random.Random(seed)` this package threaded through ordered the fragments and
+nothing else, so the builder's enumeration order came from OS entropy — and with
+the output capped, every process drew different products from the same fragments.
+
+So every sharded `discover` run before this one pooled six independently generated
+candidate lists and reported the total as one experiment. What survives: each
+docked number, because the receptor, box and reference distribution were shared
+and Vina was seeded. What does not: the pass-rate statistics, and the 12-versus-22
+swing, which was never docking noise. Unaffected entirely: the QSAR results and
+the docking-enrichment validation (AUC 0.731), neither of which calls the
+generator.
+
+The fix seeds the global generator for the enumeration and restores it afterwards.
+The test that covers it perturbs the global state between two seeded calls — what a
+fresh process does — and was confirmed to fail without the fix before being
+trusted with it.
+
+**A shortlist, when there is one, carries no potency prediction.** Generated
+candidates sit outside the QSAR model's applicability domain almost by
+construction: the reason to generate them is that they are new, which is exactly
+where the model has no basis to predict. Attaching an IC50 would be inventing a
+number. At best it is a shortlist worth a chemist's hour, not a result.
+
+### Six method errors these runs produced
 
 Each returned a believable wrong answer, and each was found by reading the output
 rather than by a test failing.
@@ -424,6 +446,13 @@ answers from one dataset, depending on the question.
 **Withholding treated as failing.** When the check was withheld, every candidate
 came back `retains_strong = False` and the pipeline dropped all 17 survivors for
 failing a check already declared unusable. No verdict is not a failing verdict.
+
+**A plausible cause accepted instead of measured — nearly.** Faced with the
+12-versus-22 swing, the first explanation reached for was an unstable sort over
+tied activity values, and work started on that before checking: curation already
+sorts its output by compound identifier, so the ranking was never order-dependent.
+The instrument built because the cause was *not* known — a signature per shard — found
+the real one two runs later. A plausible story would have left it in place.
 
 ## What this pipeline cannot do
 
