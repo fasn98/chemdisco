@@ -401,16 +401,34 @@ def combine(directory: pathlib.Path, output: str) -> int:
     # group that does the binding. The first shortlist's top entry by synthetic
     # accessibility was a polyfluorinated biaryl nitrile with no basic nitrogen,
     # scoring -9.19 against an aspartyl protease whose inhibitors all need one.
-    with_features = [
-        c for c in passing_score if c.get("retains_strong_feature") is not False
-    ]
-    dropped_features = len(passing_score) - len(with_features)
-    if dropped_features:
+    # Withholding a check means no verdict, not a failing verdict. When the
+    # profile could not discriminate -- as it cannot against a target's own
+    # data -- every candidate comes back with retains_strong False, and treating
+    # that as a failure condemned all 17 survivors of a run on the strength of a
+    # check the module had already declared unusable.
+    profile_usable = bool(profiles and profiles[0].get("most_discriminating"))
+    if profile_usable:
+        with_features = [
+            c for c in passing_score if c.get("retains_strong_feature") is not False
+        ]
+        dropped_features = len(passing_score) - len(with_features)
+        if dropped_features:
+            print(
+                f"  {dropped_features} of those retain none of the features that "
+                "most separate actives from background, and are set aside: "
+                "fragment recombination can leave a well-shaped molecule with no "
+                "way to engage the target, and a docking score cannot tell the "
+                "difference."
+            )
+    else:
+        with_features = list(passing_score)
+        dropped_features = 0
         print(
-            f"  {dropped_features} of those retain none of the features that most "
-            "separate actives from background, and are set aside: fragment "
-            "recombination can leave a well-shaped molecule with no way to engage "
-            "the target, and a docking score cannot tell the difference."
+            "  The conserved-feature check was WITHHELD: no feature stood out "
+            "against the background, so it could not tell a binding motif from an "
+            "optimisation artefact. No candidate is credited or condemned by it, "
+            "and the survivors below have NOT been checked for the chemistry that "
+            "binds -- which is a real gap in this shortlist, not a formality."
         )
 
     # A candidate carrying the anchoring motif twice is two inhibitors joined,
@@ -450,17 +468,42 @@ def combine(directory: pathlib.Path, output: str) -> int:
 
     heading("The shortlist")
     if not survivors:
+        reasons = []
+        if len(passing_score) == 0:
+            reasons.append(
+                "no candidate reached the reference efficiency threshold"
+            )
+        if dropped_features:
+            reasons.append(
+                f"{dropped_features} lost the chemistry that binds"
+            )
+        if dropped_duplicates:
+            reasons.append(
+                f"{dropped_duplicates} were recombination artefacts carrying the "
+                "anchoring motif twice"
+            )
         print(
-            "Nothing survived. Either no candidate fits the pocket as well as a "
-            "median known inhibitor, or those that do have lost the chemistry "
-            "that binds it. Both are clean negatives about this fragment set."
+            "Nothing survived: "
+            + ("; ".join(reasons) if reasons else "every candidate was filtered")
+            + "."
         )
     else:
+        checked = (
+            "retain a feature the known actives share, and "
+            if profile_usable
+            else ""
+        )
         print(
             f"{len(survivors)} structures that are novel, pass the filters "
-            "calibrated for this target, retain a feature the known actives "
-            "share, and occupy the site about as well as known inhibitors do.\n"
+            f"calibrated for this target, {checked}occupy the site about as well "
+            "as known inhibitors do per heavy atom.\n"
         )
+        if not profile_usable:
+            print(
+                "  Note: none has been checked for the binding chemistry. The "
+                "feature profile could not discriminate against this background, "
+                "so that check was withheld.\n"
+            )
         for index, candidate in enumerate(survivors[:15], start=1):
             print(f"{index:>3}. {candidate['smiles']}")
             details = [f"docking {candidate['score']:.2f} kcal/mol"]
