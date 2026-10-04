@@ -56,19 +56,61 @@ from chemdisco.dock import (  # noqa: E402
     write_pdb,
 )
 
-#: SMILES for ligands whose structures cannot be inferred from PDB coordinates
-#: alone. A PDB file records positions and element types, not bond orders, so a
-#: ligand's chemistry has to come from the chemical component dictionary or from
-#: a lookup like this one.
-KNOWN_LIGAND_SMILES: dict[str, str] = {
-    # OM99-2, the transition-state analogue inhibitor bound in 1FKN. A
-    # peptidomimetic octapeptide analogue -- large, flexible, and therefore a
-    # demanding redocking target.
-    "1OL": (
-        "CC(C)C[C@H](NC(=O)[C@@H](NC(=O)[C@@H](N)CC(=O)O)C(C)C)"
-        "[C@@H](O)C[C@H](CC(C)C)C(=O)N[C@@H](C)C(=O)N[C@@H](CC(=O)O)C(=O)O"
-    ),
-}
+def fetch_ligand_smiles(code: str, cache_dir: pathlib.Path) -> tuple[str | None, str]:
+    """Look up a ligand's chemistry from the RCSB chemical component dictionary.
+
+    A PDB coordinate file records atom positions and element symbols but not
+    bond orders, so a ligand's chemistry cannot be inferred from it. The PDB
+    publishes the chemistry separately, keyed by the three-character component
+    code, and fetching it is strictly better than maintaining a hand-written
+    lookup table that covers whichever ligands happened to come up.
+
+    Two routes, in order. The idealised SDF carries explicit bonds and
+    stereochemistry and is read with RDKit. The data API's descriptor is the
+    fallback, used when the SDF is unavailable or will not parse.
+
+    Returns:
+        ``(smiles, source)``, with ``smiles`` ``None`` on failure.
+    """
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    code = code.strip().upper()
+
+    sdf_path = cache_dir / f"{code}_ideal.sdf"
+    if not sdf_path.exists():
+        try:
+            url = f"https://files.rcsb.org/ligands/download/{code}_ideal.sdf"
+            with urllib.request.urlopen(url, timeout=60) as response:
+                sdf_path.write_bytes(response.read())
+        except Exception as error:
+            print(f"  ideal SDF unavailable ({error})")
+
+    if sdf_path.exists():
+        try:
+            from rdkit import Chem
+
+            supplier = Chem.SDMolSupplier(str(sdf_path), removeHs=True)
+            for mol in supplier:
+                if mol is not None:
+                    return Chem.MolToSmiles(mol), "RCSB idealised SDF"
+            print("  the idealised SDF held no parseable molecule")
+        except Exception as error:
+            print(f"  could not read the idealised SDF: {error}")
+
+    try:
+        url = f"https://data.rcsb.org/rest/v1/core/chemcomp/{code}"
+        with urllib.request.urlopen(url, timeout=60) as response:
+            payload = json.loads(response.read().decode())
+        for descriptor in payload.get("rcsb_chem_comp_descriptor", {}), payload:
+            smiles = descriptor.get("smiles") or descriptor.get("SMILES")
+            if smiles:
+                return smiles, "RCSB chemical component API"
+        for entry in payload.get("pdbx_chem_comp_descriptor", []):
+            if entry.get("type", "").upper() == "SMILES_CANONICAL":
+                return entry.get("descriptor"), "RCSB component descriptor"
+    except Exception as error:
+        print(f"  chemical component API failed: {error}")
+
+    return None, "no source available"
 
 
 def heading(text: str) -> None:
@@ -253,16 +295,41 @@ def main() -> int:
     for other in structure.candidate_ligands()[1:4]:
         print(f"  (also present: {other.key}, {other.n_heavy_atoms} heavy atoms)")
 
-    smiles = args.ligand_smiles or KNOWN_LIGAND_SMILES.get(ligand.name, "")
+    if args.ligand_smiles:
+        smiles, source = args.ligand_smiles, "supplied on the command line"
+    else:
+        smiles, source = fetch_ligand_smiles(ligand.name, pathlib.Path(args.cache))
     if not smiles:
         print(
-            f"\nNo SMILES known for ligand {ligand.name}. A PDB file records atom "
-            "positions and elements but not bond orders, so the ligand's chemistry "
-            "cannot be inferred from it. Supply --ligand-smiles, or add the code "
-            "to KNOWN_LIGAND_SMILES in this script."
+            f"\nCould not determine the chemistry of ligand {ligand.name}. A PDB "
+            "file records atom positions and elements but not bond orders, so it "
+            "cannot be inferred from the structure. Supply --ligand-smiles."
         )
         return 1
-    print(f"  chemistry: {smiles[:70]}{'...' if len(smiles) > 70 else ''}")
+    print(f"  chemistry ({source}): {smiles[:70]}{'...' if len(smiles) > 70 else ''}")
+
+    # A mismatch here invalidates the RMSD: the docked molecule and the crystal
+    # reference must be the same thing.
+    try:
+        from rdkit import Chem
+
+        parsed = Chem.MolFromSmiles(smiles)
+        if parsed is not None:
+            expected = parsed.GetNumHeavyAtoms()
+            print(
+                f"  SMILES has {expected} heavy atoms; the crystal ligand has "
+                f"{ligand.n_heavy_atoms}"
+            )
+            if abs(expected - ligand.n_heavy_atoms) > 2:
+                print(
+                    "\n  REFUSING: the chemistry and the observed ligand differ in "
+                    "size. RMSD between a molecule and a different molecule is not "
+                    "a measure of anything."
+                )
+                summary["refused"] = "ligand SMILES does not match the crystal ligand"
+                return 1
+    except Exception:
+        pass
     summary["ligand"] = {"code": ligand.name, "heavy_atoms": ligand.n_heavy_atoms}
 
     heading("3. Building the search box from the observed pose")
