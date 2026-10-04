@@ -325,6 +325,36 @@ fragment space, joining two potent BACE1 inhibitors is how you get a compact,
 efficient-looking molecule. The response is more fragments or a different
 generator, not a looser filter.
 
+### Constraining the generator to one warhead
+
+Filtering the double-warhead products out does not help, because the generation cap
+applies to what the builder emits: the budget goes to artefacts. So the constraint
+moved into the fragment pool. Fragments carrying the measured anchoring motif become
+BRICS *seeds*; only motif-free fragments are offered as reagents; every product grows
+outward from exactly one warhead by construction.
+
+Run 37233542592, same target and seed, all six shards agreeing on ligand signature
+`a8ae9075598df11d`:
+
+```
+26 fragments carry the amidine -> build seeds
+55 motif-free fragments        -> reagents
+197 candidates retained (the unconstrained run retained 60 from the same budget)
+ 0 products carried the motif more than once
+ 0 products lost the motif during recombination
+60 of 60 candidates carried forward retain a conserved feature; 0 retain none
+```
+
+The motif is measured, not declared: the profile is built against the
+unrelated-target background *before* generation, so a kinase run would be
+constrained on whatever separates kinase actives, and a target where nothing
+discriminates is generated unconstrained and says so.
+
+The pooled triage for this run has not been produced — the combine job could not
+start (GitHub Actions spending limit), and the per-shard artifacts are not reachable
+from this environment. The numbers above are per-shard measurements; the shortlist
+is not among them.
+
 ### The shards were never docking the same list
 
 Two runs with the same seed had docked 48 and 47 candidates, passing 12 and 22 of
