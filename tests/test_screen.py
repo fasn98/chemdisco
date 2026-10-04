@@ -690,3 +690,124 @@ class TestPublicApi(unittest.TestCase):
                 assert spec is not None and spec.loader is not None
                 module = importlib.util.module_from_spec(spec)
                 spec.loader.exec_module(module)
+
+
+class TestSharding(unittest.TestCase):
+    """Every shard must be a miniature of the whole set.
+
+    Striding an interleaved list looks correct and is not. Round-robin
+    interleaving is periodic, so a six-way stride lands on a fixed phase: the
+    real run produced three shards holding 13-14 actives each and three holding
+    none. All six finished, so the pooled result survived -- but one shard
+    running out of budget would have skewed the pool, and an all-decoy shard
+    cannot be analysed at all.
+    """
+
+    def _dataset(self, n_actives=40, n_decoys=50):
+        from chemdisco.dock import interleave_by_label
+
+        smiles = [f"a{i}" for i in range(n_actives)] + [
+            f"d{i}" for i in range(n_decoys)
+        ]
+        labels = [1] * n_actives + [0] * n_decoys
+        return interleave_by_label(smiles, labels)
+
+    def test_the_old_striding_bug_is_reproducible(self) -> None:
+        # Documents why shard_by_label exists: plain striding of the interleaved
+        # list gives shards with no actives at all.
+        smiles, labels = self._dataset()
+        phases = {sum(labels[shard::6]) for shard in range(6)}
+        self.assertIn(0, phases, "plain striding should starve some shards")
+
+    def test_every_shard_holds_both_groups(self) -> None:
+        from chemdisco.dock import shard_by_label
+
+        smiles, labels = self._dataset()
+        for shard in range(6):
+            with self.subTest(shard=shard):
+                _, shard_labels = shard_by_label(
+                    smiles, labels, shard=shard, n_shards=6
+                )
+                self.assertGreater(sum(shard_labels), 0, "no actives in this shard")
+                self.assertGreater(
+                    len(shard_labels) - sum(shard_labels), 0, "no decoys"
+                )
+
+    def test_shards_partition_the_set_exactly(self) -> None:
+        from chemdisco.dock import shard_by_label
+
+        smiles, labels = self._dataset()
+        collected: list[str] = []
+        for shard in range(6):
+            shard_smiles, _ = shard_by_label(
+                smiles, labels, shard=shard, n_shards=6
+            )
+            collected.extend(shard_smiles)
+        self.assertEqual(sorted(collected), sorted(smiles))
+
+    def test_each_shard_roughly_preserves_the_active_ratio(self) -> None:
+        from chemdisco.dock import shard_by_label
+
+        smiles, labels = self._dataset()
+        whole = sum(labels) / len(labels)
+        for shard in range(6):
+            with self.subTest(shard=shard):
+                _, shard_labels = shard_by_label(
+                    smiles, labels, shard=shard, n_shards=6
+                )
+                ratio = sum(shard_labels) / len(shard_labels)
+                self.assertLess(abs(ratio - whole), 0.1)
+
+    def test_a_truncated_shard_is_still_balanced(self) -> None:
+        # The property that makes a time budget survivable.
+        from chemdisco.dock import shard_by_label
+
+        smiles, labels = self._dataset()
+        _, shard_labels = shard_by_label(smiles, labels, shard=0, n_shards=6)
+        for cut in (4, 8, 12):
+            with self.subTest(cut=cut):
+                prefix = shard_labels[:cut]
+                self.assertEqual(set(prefix), {0, 1})
+
+    def test_a_single_shard_returns_everything(self) -> None:
+        from chemdisco.dock import shard_by_label
+
+        smiles, labels = self._dataset()
+        shard_smiles, _ = shard_by_label(smiles, labels, shard=0, n_shards=1)
+        self.assertEqual(sorted(shard_smiles), sorted(smiles))
+
+    def test_invalid_shard_indices_raise(self) -> None:
+        from chemdisco.dock import shard_by_label
+
+        smiles, labels = self._dataset()
+        with self.assertRaises(ValueError):
+            shard_by_label(smiles, labels, shard=6, n_shards=6)
+        with self.assertRaises(ValueError):
+            shard_by_label(smiles, labels, shard=0, n_shards=0)
+
+
+class TestGroupTolerances(unittest.TestCase):
+    def test_formal_charge_is_exact_per_pair_but_not_per_group(self) -> None:
+        # Per-pair matching requires identical charge, since a charge difference
+        # moves a docking score far more than a size difference. But balancing
+        # removes decoys and can leave a mean gap of 0.05 -- one decoy in twenty
+        # differing by a single unit. Flagging that as a confound buries the real
+        # warnings under a permanent false one, which the first pooled run did.
+        from chemdisco.dock import DEFAULT_TOLERANCES, GROUP_TOLERANCES
+
+        self.assertEqual(DEFAULT_TOLERANCES["formal_charge"], 0.0)
+        self.assertGreater(GROUP_TOLERANCES["formal_charge"], 0.0)
+        self.assertLess(GROUP_TOLERANCES["formal_charge"], 0.5)
+
+    def test_a_tiny_charge_gap_is_no_longer_flagged(self) -> None:
+        from chemdisco.dock import describe_property_gap
+
+        text = describe_property_gap({"formal_charge": 0.05, "molecular_weight": 10.0})
+        self.assertNotIn("WARNING", text)
+
+    def test_a_real_charge_gap_is_still_flagged(self) -> None:
+        from chemdisco.dock import describe_property_gap
+
+        text = describe_property_gap({"formal_charge": 0.6, "molecular_weight": 5.0})
+        self.assertIn("WARNING", text)
+        self.assertIn("formal_charge", text)

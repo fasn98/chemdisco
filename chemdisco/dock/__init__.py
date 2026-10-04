@@ -14,6 +14,7 @@ set of plausible poses for a site that binds nothing.
 
 from .decoys import (
     DEFAULT_TOLERANCES,
+    GROUP_TOLERANCES,
     MAX_DECOY_SIMILARITY,
     DecoySelection,
     balance_selection,
@@ -32,6 +33,7 @@ from .enrichment import (
 from .screen import (
     ScreenResult,
     interleave_by_label,
+    shard_by_label,
     screen,
     triage_candidates,
 )
@@ -79,6 +81,7 @@ from .pdb import (
 
 __all__ = [
     "DEFAULT_TOLERANCES",
+    "GROUP_TOLERANCES",
     "MAX_DECOY_SIMILARITY",
     "MAX_PEPTIDE_LIGAND_RESIDUES",
     "DecoySelection",
@@ -95,6 +98,7 @@ __all__ = [
     "property_gap",
     "screen",
     "select_decoys",
+    "shard_by_label",
     "triage_candidates",
     "MIN_LIGAND_HEAVY_ATOMS",
     "VINA_ERROR_KCAL",

@@ -57,6 +57,7 @@ from chemdisco.data.chembl import ChEMBLClient, ChEMBLError, ResponseCache  # no
 from chemdisco.dock import (  # noqa: E402
     analyse_enrichment,
     interleave_by_label,
+    shard_by_label,
     box_from_ligand,
     balance_selection,
     describe_property_gap,
@@ -438,12 +439,12 @@ def main() -> int:
     ligands, labels = interleave_by_label(ligands, labels)
 
     if args.n_shards > 1:
-        # Stride rather than block, so each shard keeps the interleaved balance
-        # and a shard that runs out of budget is still a balanced sample.
-        ligands = ligands[args.shard :: args.n_shards]
-        labels = labels[args.shard :: args.n_shards]
+        ligands, labels = shard_by_label(
+            ligands, labels, shard=args.shard, n_shards=args.n_shards
+        )
         print(
-            f"  shard {args.shard + 1} of {args.n_shards}: {len(ligands)} ligands"
+            f"  shard {args.shard + 1} of {args.n_shards}: {len(ligands)} ligands "
+            f"({sum(labels)} actives, {len(labels) - sum(labels)} decoys)"
         )
     print(
         f"  {len(ligands)} ligands at exhaustiveness {args.exhaustiveness}, "

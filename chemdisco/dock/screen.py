@@ -228,6 +228,47 @@ def screen(
     return result
 
 
+def shard_by_label(
+    smiles_list: Sequence[str],
+    labels: Sequence[int],
+    *,
+    shard: int,
+    n_shards: int,
+) -> tuple[list[str], list[int]]:
+    """Take this shard's slice, keeping every group proportionally represented.
+
+    Striding an interleaved list looks like it should work and does not. Round-
+    robin interleaving of two groups is periodic, so taking every n-th element
+    lands on a fixed phase: a six-way stride of a decoy-active-decoy-active list
+    gave three shards with 13-14 actives each and three with none. All six
+    completed, so the pooled result was unharmed -- but a single shard running
+    out of budget would have skewed the pool badly, and a shard that is all
+    decoys cannot be analysed on its own at all.
+
+    Dealing each group separately keeps every shard a miniature of the whole.
+    """
+    if len(smiles_list) != len(labels):
+        raise ValueError(f"{len(smiles_list)} ligands against {len(labels)} labels")
+    if n_shards < 1:
+        raise ValueError("n_shards must be at least 1")
+    if not 0 <= shard < n_shards:
+        raise ValueError(f"shard {shard} outside 0..{n_shards - 1}")
+
+    groups: dict[int, list[str]] = {}
+    for smiles, label in zip(smiles_list, labels, strict=True):
+        groups.setdefault(label, []).append(smiles)
+
+    chosen_smiles: list[str] = []
+    chosen_labels: list[int] = []
+    for label in sorted(groups):
+        members = groups[label][shard::n_shards]
+        chosen_smiles.extend(members)
+        chosen_labels.extend([label] * len(members))
+
+    # Interleave within the shard too, so a budget cut leaves it balanced.
+    return interleave_by_label(chosen_smiles, chosen_labels)
+
+
 def interleave_by_label(
     smiles_list: Sequence[str], labels: Sequence[int]
 ) -> tuple[list[str], list[int]]:

@@ -50,6 +50,14 @@ DEFAULT_TOLERANCES: dict[str, float] = {
     "formal_charge": 0.0,
 }
 
+#: Tolerances applied to the GROUP means rather than to individual pairs.
+#: Formal charge differs: matched exactly per pair, because a charge difference
+#: changes a docking score far more than a size difference, but a group mean can
+#: drift slightly once balancing removes decoys. A mean gap of 0.05 means about
+#: one decoy in twenty differs by a single charge unit, which is noise; treating
+#: it as a confound buries the real warnings under a permanent false one.
+GROUP_TOLERANCES: dict[str, float] = {**DEFAULT_TOLERANCES, "formal_charge": 0.15}
+
 #: Maximum Tanimoto similarity between a decoy and any active. Above this the
 #: decoy may share the actives' binding mode, which would make it a probable
 #: active rather than a control. DUD-E uses 0.25 on ECFP4.
@@ -290,7 +298,7 @@ def describe_property_gap(gaps: dict[str, float]) -> str:
     lines = ["Property gap (active mean - decoy mean):"]
     concerning: list[str] = []
     for name, gap in sorted(gaps.items()):
-        tolerance = DEFAULT_TOLERANCES.get(name)
+        tolerance = GROUP_TOLERANCES.get(name)
         flag = ""
         if tolerance is not None and abs(gap) > tolerance:
             flag = "  <- large enough to bias a docking score on its own"
@@ -341,7 +349,7 @@ def balance_selection(
     Returns:
         ``(kept_indices, explanation)``, indices into ``decoy_properties``.
     """
-    tolerances = tolerances or DEFAULT_TOLERANCES
+    tolerances = tolerances or GROUP_TOLERANCES
     if not active_properties or not decoy_properties:
         raise ValueError("both groups must be non-empty")
 
