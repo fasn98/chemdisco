@@ -1,0 +1,72 @@
+name: Probe docking toolchain
+
+# A diagnostic run before the docking module is written. The AutoDock toolchain
+# has several independent ways to fail on a clean machine -- compiled wheels,
+# ligand preparation, receptor preparation -- and which ones apply is not
+# knowable from documentation. Finding out first is cheaper than building a
+# module around an engine that will not run.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install OpenBabel
+        # The fallback receptor-conversion route, and the one that historically
+        # works when the AutoDock-native tooling does not.
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq openbabel
+
+      - name: Install the Python toolchain
+        # continue-on-error so a failing install still reaches the probe, which
+        # reports precisely which piece is missing. Nothing is pinned: the point
+        # is to learn what a plain install produces today.
+        continue-on-error: true
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install rdkit requests
+          python -m pip install vina || echo "vina install failed"
+          python -m pip install meeko || echo "meeko install failed"
+
+      - name: Probe
+        run: |
+          mkdir -p runs
+          python scripts/probe_docking.py 2>&1 | tee runs/probe-docking.log
+
+      - name: Report
+        if: always()
+        run: |
+          {
+            echo "## Docking toolchain probe (Python ${{ matrix.python-version }})"
+            echo '```'
+            cat runs/probe-docking.log 2>/dev/null || echo '(no output)'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Annotate
+        if: always()
+        # One annotation carrying the whole report, newlines encoded as %0A:
+        # job logs and artifact downloads are unreachable from some environments,
+        # and GitHub caps the number of annotations rather than their length.
+        run: |
+          if [ -f runs/probe-docking.log ]; then
+            payload=$(sed 's/%/%25/g' runs/probe-docking.log | sed 's/\r//' \
+              | awk '{printf "%s%%0A", $0}')
+            echo "::notice title=Docking probe py${{ matrix.python-version }}::${payload}"
+          else
+            echo "::error::the probe produced no output"
+          fi
