@@ -34,6 +34,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+from typing import ClassVar
 
 from ..chem.standardize import RDKIT_AVAILABLE, require_rdkit
 
