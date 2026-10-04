@@ -20,6 +20,10 @@ on:
         description: "Comma-separated PDB ids to inspect instead of docking"
         required: false
         default: ""
+      mode:
+        description: "redock (default) or enrichment"
+        required: false
+        default: "redock"
       exhaustiveness:
         description: "Vina search effort"
         required: false
@@ -64,6 +68,11 @@ jobs:
           if [ -n "${{ inputs.survey }}" ]; then
             python scripts/validate_docking.py \
               --survey "${{ inputs.survey }}" 2>&1 | tee runs/redock.log
+          elif [ "${{ inputs.mode }}" = "enrichment" ]; then
+            python scripts/validate_enrichment.py \
+              --pdb "${{ inputs.pdb || '4FRS' }}" \
+              --exhaustiveness "${{ inputs.exhaustiveness || '8' }}" \
+              --output runs/enrichment.json 2>&1 | tee runs/redock.log
           else
             python scripts/validate_docking.py \
               --pdb "${{ inputs.pdb || '2QMG' }}" \
