@@ -1,0 +1,117 @@
+name: Discover
+
+# The full pipeline on one target: curate, generate, dock, triage.
+#
+# Sharded for the same reason the enrichment run is. Each shard derives the
+# identical ligand list from the same cached ChEMBL data and the same seed, then
+# docks a slice of it -- so the combine step is pooling one experiment, not
+# averaging several. It checks the receptor and box agree rather than assuming it.
+
+on:
+  workflow_dispatch:
+    inputs:
+      accession:
+        description: "UniProt accession"
+        required: false
+        default: "P56817"
+      name:
+        description: "Target name"
+        required: false
+        default: "BACE1"
+      pdb:
+        description: "Receptor structure"
+        required: false
+        default: "4FRS"
+      exhaustiveness:
+        required: false
+        default: "4"
+
+jobs:
+  dock:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install OpenBabel
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq openbabel
+      - name: Install the toolchain
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[chem,dev]"
+          python -m pip install vina scipy gemmi meeko
+      - name: Dock this shard
+        run: |
+          set -o pipefail
+          mkdir -p runs
+          python scripts/discover.py \
+            --accession "${{ inputs.accession || 'P56817' }}" \
+            --name "${{ inputs.name || 'BACE1' }}" \
+            --pdb "${{ inputs.pdb || '4FRS' }}" \
+            --exhaustiveness "${{ inputs.exhaustiveness || '4' }}" \
+            --shard ${{ matrix.shard }} \
+            --n-shards 6 \
+            --time-budget 2400 \
+            --output "runs/discover_shard_${{ matrix.shard }}.json" 2>&1 \
+            | tee "runs/discover_shard_${{ matrix.shard }}.log"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: discover-shard-${{ matrix.shard }}
+          path: runs/discover_shard_${{ matrix.shard }}.*
+          if-no-files-found: warn
+
+  shortlist:
+    needs: dock
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[chem,dev]"
+      - uses: actions/download-artifact@v4
+        with:
+          path: shards
+          pattern: discover-shard-*
+          merge-multiple: true
+      - name: Combine and triage
+        id: combine
+        run: |
+          set -o pipefail
+          mkdir -p runs
+          python scripts/discover.py \
+            --combine shards \
+            --output runs/shortlist.json 2>&1 | tee runs/shortlist.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: shortlist
+          path: runs/shortlist.*
+          if-no-files-found: warn
+      - name: Annotate
+        if: always()
+        run: |
+          if [ ! -f runs/shortlist.log ]; then
+            echo "::error::the combine step produced no output"
+            exit 0
+          fi
+          level=error
+          [ "${{ steps.combine.outcome }}" = "success" ] && level=notice
+          total=$(wc -l < runs/shortlist.log)
+          half=$(( (total + 1) / 2 ))
+          encode() { sed 's/%/%25/g' | sed 's/\r//' | awk '{printf "%s%%0A", $0}'; }
+          echo "::${level} title=Shortlist 1 of 2::$(head -n "$half" runs/shortlist.log | encode)"
+          echo "::${level} title=Shortlist 2 of 2::$(tail -n +"$((half + 1))" runs/shortlist.log | encode)"

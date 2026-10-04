@@ -682,7 +682,12 @@ class TestPublicApi(unittest.TestCase):
         if str(root) not in sys.path:
             sys.path.insert(0, str(root))
 
-        for script in ("validate_enrichment", "validate_docking", "validate_target"):
+        for script in (
+            "discover",
+            "validate_enrichment",
+            "validate_docking",
+            "validate_target",
+        ):
             with self.subTest(script=script):
                 path = root / "scripts" / f"{script}.py"
                 spec = importlib.util.spec_from_file_location(script, path)
