@@ -77,18 +77,24 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Annotate the failure
-        if: failure()
-        # One annotation carrying the captured output, newlines encoded as %0A.
-        # The per-line form hit GitHub's ten-annotation cap and truncated the
-        # report to its last few lines, which is where it was least useful.
+      - name: Annotate the output
+        if: always()
+        # Always, not only on failure: the metrics are the point of the run, and
+        # raw job logs, job summaries and artifact downloads are all unreachable
+        # from some environments. Annotations are the one channel the REST API
+        # serves, and GitHub caps their number rather than their length -- hence
+        # one annotation carrying the whole report, newlines encoded as %0A.
         run: |
           if [ -f runs/validate.log ]; then
             payload=$(tail -c 50000 runs/validate.log \
               | sed 's/%/%25/g' \
               | sed 's/\r//' \
               | awk '{printf "%s%%0A", $0}')
-            echo "::error title=Validation output::${payload}"
+            if [ "${{ steps.validate.outcome }}" = "success" ]; then
+              echo "::notice title=Validation output::${payload}"
+            else
+              echo "::error title=Validation output::${payload}"
+            fi
           else
             echo "::error::the validation step produced no captured output"
           fi
