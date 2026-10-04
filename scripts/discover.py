@@ -264,7 +264,27 @@ def build_inputs(args) -> dict | None:
     candidates = generation.candidates[: args.n_candidates]
     print(f"\n  carrying {len(candidates)} candidates forward to docking")
 
+    # Two signatures, because they separate two different failures. The ligand
+    # signature says whether the docked list is the same; the curation signature
+    # says whether the dataset underneath it was. If the second differs, the
+    # retrieval changed -- a new ChEMBL release, a truncated fetch, a cache miss --
+    # and chasing the generator would be chasing the wrong thing.
+    ligand_signature = hashlib.sha256(
+        "\n".join(
+            [p.smiles for p in reference] + [c.smiles for c in candidates]
+        ).encode()
+    ).hexdigest()[:16]
+    curation_signature = hashlib.sha256(
+        "\n".join(
+            f"{p.compound_id}:{p.pactivity.require():.4f}" for p in points
+        ).encode()
+    ).hexdigest()[:16]
+
     return {
+        "ligand_signature": ligand_signature,
+        "curation_signature": curation_signature,
+        "n_curated": len(points),
+        "n_actives": len(actives),
         "reference_smiles": [p.smiles for p in reference],
         "reference_pactivity": [p.pactivity.require() for p in reference],
         "candidate_smiles": [c.smiles for c in candidates],
@@ -321,6 +341,7 @@ def combine(directory: pathlib.Path, output: str) -> int:
     receptors: set[str] = set()
     boxes: set[str] = set()
     ligand_signatures: set[str] = set()
+    curation_signatures: set[str] = set()
     seconds = 0.0
     requested = 0
 
@@ -333,11 +354,15 @@ def combine(directory: pathlib.Path, output: str) -> int:
         boxes.add(payload["box_signature"])
         if payload.get("ligand_signature"):
             ligand_signatures.add(payload["ligand_signature"])
+        if payload.get("curation_signature"):
+            curation_signatures.add(payload["curation_signature"])
         seconds += payload.get("elapsed_seconds", 0.0)
         requested += payload.get("n_requested", 0)
         print(
             f"  {path.name}: {len(payload['reference_scores'])} reference, "
-            f"{len(payload['candidates'])} candidates"
+            f"{len(payload['candidates'])} candidates, ligands "
+            f"{payload.get('ligand_signature', 'unrecorded')}, curation "
+            f"{payload.get('curation_signature', 'unrecorded')}"
         )
 
     if len(receptors) > 1 or len(boxes) > 1:
@@ -358,6 +383,20 @@ def combine(directory: pathlib.Path, output: str) -> int:
             "retrieval that returned a different number of records -- compare the "
             "curation counts the shard logs print."
         )
+        if len(curation_signatures) > 1:
+            print(
+                "  The curation signatures differ too "
+                f"({', '.join(sorted(curation_signatures))}), so the datasets "
+                "themselves were not the same. The retrieval is where to look, "
+                "not the generator."
+            )
+        else:
+            print(
+                "  The curation signatures AGREE, so every shard curated the same "
+                "dataset and the divergence happened after it -- in generation or "
+                "in candidate selection, which are supposed to be deterministic "
+                "given the seed."
+            )
         return 1
 
     print(
@@ -870,14 +909,8 @@ def main() -> int:
                 "candidates": candidate_rows,
                 "receptor_id": args.pdb.upper(),
                 "box_signature": f"{box.center}|{box.size}",
-                # What makes sharding valid: every shard must derive the identical
-                # ligand list and dock a slice of it. Each shard fetches ChEMBL
-                # for itself, so that is an assumption until it is checked.
-                "ligand_signature": hashlib.sha256(
-                    "\n".join(
-                        [*inputs["reference_smiles"], *inputs["candidate_smiles"]]
-                    ).encode()
-                ).hexdigest()[:16],
+                "ligand_signature": inputs["ligand_signature"],
+                "curation_signature": inputs["curation_signature"],
                 "n_requested": len(ligands),
                 "elapsed_seconds": result.elapsed_seconds,
                 "feature_profile": {
@@ -915,6 +948,25 @@ def main() -> int:
     )
     print(f"\nShard written to {path}")
     print(f"Elapsed: {time.monotonic() - started:.0f}s")
+
+    # Printed last, and deliberately so: the only readable channel out of a
+    # sharded run in some environments is the tail of its log. A signature that
+    # exists in the JSON and nowhere else cannot be compared between shards or
+    # between runs, which is the whole reason it is computed.
+    heading("Reproducibility")
+    print(f"  ligand signature:   {inputs['ligand_signature']}")
+    print(f"  curation signature: {inputs['curation_signature']}")
+    print(
+        f"  derived from {inputs['n_curated']} curated compounds, "
+        f"{inputs['n_actives']} actives, {inputs['n_generated']} generated, "
+        f"{len(inputs['candidate_smiles'])} carried forward, "
+        f"{len(ligands)} in this shard's slice"
+    )
+    print(
+        "  Two shards of one run, or two runs of this pipeline, must print the "
+        "same two signatures. They are the evidence that a pooled result is one "
+        "experiment rather than several averaged together."
+    )
     return 0
 
 
