@@ -12,31 +12,6 @@ preparation raises; a box centred on a crystallisation additive produces a full
 set of plausible poses for a site that binds nothing.
 """
 
-from .decoys import (
-    DEFAULT_TOLERANCES,
-    GROUP_TOLERANCES,
-    MAX_DECOY_SIMILARITY,
-    DecoySelection,
-    balance_selection,
-    describe_property_gap,
-    property_gap,
-    select_decoys,
-)
-from .enrichment import (
-    EnrichmentResult,
-    analyse_enrichment,
-    auc_roc,
-    bedroc,
-    enrichment_factor,
-    max_enrichment_factor,
-)
-from .screen import (
-    ScreenResult,
-    interleave_by_label,
-    shard_by_label,
-    screen,
-    triage_candidates,
-)
 from .box import (
     Box,
     atoms_within,
@@ -48,6 +23,16 @@ from .box import (
     extent,
     pose_is_correct,
     rmsd,
+)
+from .decoys import (
+    DEFAULT_TOLERANCES,
+    GROUP_TOLERANCES,
+    MAX_DECOY_SIMILARITY,
+    DecoySelection,
+    balance_selection,
+    describe_property_gap,
+    property_gap,
+    select_decoys,
 )
 from .engine import (
     VINA_ERROR_KCAL,
@@ -66,6 +51,14 @@ from .engine import (
     toolchain_report,
     vina_available,
 )
+from .enrichment import (
+    EnrichmentResult,
+    analyse_enrichment,
+    auc_roc,
+    bedroc,
+    enrichment_factor,
+    max_enrichment_factor,
+)
 from .pdb import (
     MAX_PEPTIDE_LIGAND_RESIDUES,
     MIN_LIGAND_HEAVY_ATOMS,
@@ -77,6 +70,13 @@ from .pdb import (
     parse_pdb,
     strip_to_receptor,
     write_pdb,
+)
+from .screen import (
+    ScreenResult,
+    interleave_by_label,
+    screen,
+    shard_by_label,
+    triage_candidates,
 )
 
 __all__ = [
