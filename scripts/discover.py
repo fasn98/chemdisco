@@ -165,32 +165,69 @@ def build_inputs(args) -> dict | None:
     seeds = actives[: args.n_seed]
 
     # The feature-profile background must be chemically DISTINCT from the
-    # actives, not merely less potent. A weak BACE1 binder is still a
-    # BACE1-series compound carrying the same amidine, and profiling against
-    # those gave every feature the same ~1.8x enrichment -- so an aryl fluoride
-    # counted as an anchoring motif and candidates with no basic nitrogen passed.
-    weak = [
-        p for p in points if p.pactivity.require() <= args.background_threshold
-    ]
+    # actives, not merely less potent. Two sources, and the history matters:
+    #
+    #   `weak`      -- the weakly active end of this target's own curated data.
+    #                  Tried first and measurably wrong: every feature came out
+    #                  at ~1.8x enrichment, so an aryl fluoride counted as an
+    #                  anchoring motif and candidates with no basic nitrogen
+    #                  passed. A weak BACE1 binder is still a BACE1-series
+    #                  compound carrying the same amidine. Kept only so the
+    #                  failure stays reproducible.
+    #   `unrelated` -- ligands of kinases, GPCRs, nuclear receptors and
+    #                  unrelated enzymes. Presumed non-binders rather than
+    #                  measured ones, which is the trade this check needs:
+    #                  shared chemistry erases the signal, so a harder control
+    #                  is the wrong control here.
     background: list[str] = []
-    if weak:
-        from chemdisco.chem.similarity import max_similarity_to_reference
+    background_summary: dict | None = None
 
-        similarities, _ = max_similarity_to_reference(
-            [p.smiles for p in weak], [p.smiles for p in reference]
+    if args.background_source == "unrelated":
+        from chemdisco.data.background import (
+            fetch_unrelated_background,
         )
-        background = [
-            p.smiles
-            for p, similarity in zip(weak, similarities, strict=True)
-            if 0.0 <= similarity < args.background_max_similarity
-        ][:400]
-        print(
-            f"\n  feature-profile background: {len(background)} weak binders "
-            f"below {args.background_max_similarity} Tanimoto to every active, "
-            f"from {len(weak)} weak compounds. Same-series weak binders are "
-            "excluded: they carry the actives' motifs too, which erases the "
-            "signal the profile is meant to find."
+        from chemdisco.data.background import (
+            summarise as summarise_background,
         )
+
+        print("\n  fetching a feature-profile background from unrelated targets")
+        collected = fetch_unrelated_background(
+            client,
+            exclude_molecule_ids=[p.compound_id for p in points],
+            per_target=max(args.background_size // 6, 50),
+            max_total=args.background_size,
+        )
+        print("  " + collected.describe().replace("\n", "\n  "))
+        background_summary = summarise_background(collected)
+        if collected.is_usable:
+            background = list(collected.smiles)
+        else:
+            print(
+                "  Not used. An unusable background is worse than none: it "
+                "produces enrichment ratios that look like measurements."
+            )
+    elif args.background_source == "weak":
+        weak = [
+            p for p in points if p.pactivity.require() <= args.background_threshold
+        ]
+        if weak:
+            from chemdisco.chem.similarity import max_similarity_to_reference
+
+            similarities, _ = max_similarity_to_reference(
+                [p.smiles for p in weak], [p.smiles for p in reference]
+            )
+            background = [
+                p.smiles
+                for p, similarity in zip(weak, similarities, strict=True)
+                if 0.0 <= similarity < args.background_max_similarity
+            ][:400]
+            print(
+                f"\n  feature-profile background: {len(background)} weak binders "
+                f"below {args.background_max_similarity} Tanimoto to every active, "
+                f"from {len(weak)} weak compounds. This source is known not to "
+                "discriminate -- see the module docstring -- and is kept for "
+                "comparison only."
+            )
 
     heading("2. Generating candidates")
     print(f"  policy: {BACE1_POLICY.describe()}")
@@ -224,6 +261,7 @@ def build_inputs(args) -> dict | None:
         ],
         "reference_feature_smiles": [p.smiles for p in reference],
         "background_smiles": background,
+        "background_summary": background_summary,
         "n_fragments": generation.n_fragments,
         "n_generated": generation.n_generated,
         "policy_audit_pass_rate": (
@@ -304,6 +342,23 @@ def combine(directory: pathlib.Path, output: str) -> int:
             f"  built from {profile['n_actives']} actives against "
             f"{profile['n_background']} background compounds"
         )
+        summary = profile.get("background_summary") or {}
+        if summary:
+            families = ", ".join(
+                f"{family} ({count})"
+                for family, count in sorted(
+                    summary.get("families", {}).items(), key=lambda kv: -kv[1]
+                )
+            )
+            print(f"  background: {summary.get('source', 'unspecified')}")
+            print(f"    families: {families or 'none'}")
+            if summary.get("n_excluded_overlap"):
+                print(
+                    f"    {summary['n_excluded_overlap']} compound(s) excluded for "
+                    "also appearing in this target's own dataset"
+                )
+            if summary.get("failures"):
+                print(f"    not retrieved: {', '.join(summary['failures'])}")
         print(f"  conserved: {', '.join(profile['conserved']) or 'none'}")
         print(
             f"  most discriminating: "
@@ -406,7 +461,16 @@ def combine(directory: pathlib.Path, output: str) -> int:
     # data -- every candidate comes back with retains_strong False, and treating
     # that as a failure condemned all 17 survivors of a run on the strength of a
     # check the module had already declared unusable.
-    profile_usable = bool(profiles and profiles[0].get("most_discriminating"))
+    #
+    # A background is required, not optional. Without one, `most_discriminating`
+    # falls back to every conserved feature, and "conserved" then means nothing
+    # more than "common" -- which is how an aromatic ring, present in almost every
+    # drug-like molecule, once passed as an anchoring motif.
+    profile_usable = bool(
+        profiles
+        and profiles[0].get("has_background")
+        and profiles[0].get("most_discriminating")
+    )
     if profile_usable:
         with_features = [
             c for c in passing_score if c.get("retains_strong_feature") is not False
@@ -423,9 +487,16 @@ def combine(directory: pathlib.Path, output: str) -> int:
     else:
         with_features = list(passing_score)
         dropped_features = 0
+        reason = (
+            "no feature stood out against the background"
+            if profiles and profiles[0].get("has_background")
+            else "no usable background was available, so prevalence alone decided "
+            "what counts as conserved -- which cannot separate a binding motif "
+            "from an aromatic ring"
+        )
         print(
-            "  The conserved-feature check was WITHHELD: no feature stood out "
-            "against the background, so it could not tell a binding motif from an "
+            f"  The conserved-feature check was WITHHELD: {reason}, so it could "
+            "not tell a binding motif from an "
             "optimisation artefact. No candidate is credited or condemned by it, "
             "and the survivors below have NOT been checked for the chemistry that "
             "binds -- which is a real gap in this shortlist, not a formality."
@@ -582,6 +653,24 @@ def main() -> int:
     parser.add_argument("--name", default="BACE1")
     parser.add_argument("--pdb", default="4FRS")
     parser.add_argument("--active-threshold", type=float, default=8.0)
+    parser.add_argument(
+        "--background-source",
+        choices=("unrelated", "weak", "none"),
+        default="unrelated",
+        help=(
+            "Where the feature-profile background comes from. 'unrelated': "
+            "ligands of unrelated targets, presumed non-binders. 'weak': this "
+            "target's own weak binders, kept because it is a reproducible "
+            "failure, not because it works. 'none': prevalence only, which "
+            "cannot tell a binding motif from an aromatic ring"
+        ),
+    )
+    parser.add_argument(
+        "--background-size",
+        type=int,
+        default=1200,
+        help="Ceiling on the unrelated-target background",
+    )
     parser.add_argument(
         "--background-max-similarity",
         type=float,
@@ -760,6 +849,13 @@ def main() -> int:
                     "ubiquitous": list(feature_screen.profile.ubiquitous),
                     "n_actives": feature_screen.profile.n_actives,
                     "n_background": feature_screen.profile.n_background,
+                    # Recorded explicitly rather than inferred downstream. With
+                    # no background, `most_discriminating` falls back to every
+                    # conserved feature -- which is how an aromatic ring once
+                    # counted as an anchoring motif.
+                    "has_background": feature_screen.profile.has_background,
+                    "can_discriminate": feature_screen.profile.can_discriminate,
+                    "background_summary": inputs.get("background_summary"),
                     "prevalence": {
                         name: round(value, 3)
                         for name, value in feature_screen.profile.prevalence.items()
