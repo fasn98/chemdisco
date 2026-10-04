@@ -63,7 +63,21 @@ jobs:
             --time-budget 2400 \
             --output "runs/discover_shard_${{ matrix.shard }}.json" 2>&1 \
             | tee "runs/discover_shard_${{ matrix.shard }}.log"
+      - name: Annotate this shard
+        if: always()
+        # Without this a failing shard reported only "exit code 1" and the
+        # combine job was skipped, so the whole run produced nothing readable.
+        run: |
+          if [ ! -f runs/discover_shard_${{ matrix.shard }}.log ]; then
+            echo "::error::shard ${{ matrix.shard }} produced no output"
+            exit 0
+          fi
+          payload=$(tail -n 60 runs/discover_shard_${{ matrix.shard }}.log \
+            | sed 's/%/%25/g' | sed 's/\r//' | awk '{printf "%s%%0A", $0}')
+          echo "::notice title=Shard ${{ matrix.shard }}::${payload}"
+
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: discover-shard-${{ matrix.shard }}
           path: runs/discover_shard_${{ matrix.shard }}.*
@@ -71,6 +85,9 @@ jobs:
 
   shortlist:
     needs: dock
+    # Runs even when a shard failed: a partial pool is still analysable, and
+    # losing the whole run to one bad worker wastes an hour of docking.
+    if: always()
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
