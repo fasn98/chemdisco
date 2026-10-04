@@ -116,13 +116,14 @@ class TestScoreReporting(unittest.TestCase):
         self.assertFalse(result.ligand_efficiency().is_known)
 
     def test_narrow_pose_spread_is_flagged(self) -> None:
-        # Poses within a few tenths of a kcal/mol mean the search did not
-        # strongly prefer one arrangement.
+        # Poses separated by less than the method's own error mean the ranking
+        # between them is not determined by the score.
         result = self._result(scores=(-9.0, -8.9, -8.85))
         self.assertIn(
-            "did not strongly prefer",
+            "not determined by the score",
             " ".join(result.score_quantity().notes),
         )
+        self.assertFalse(result.pose_ranking_is_determined)
 
     def test_score_spread_is_reported(self) -> None:
         self.assertAlmostEqual(self._result().score_spread or 0.0, 1.1, places=6)
