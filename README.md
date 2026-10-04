@@ -121,6 +121,9 @@ chemdisco/
   dock/
     pdb.py             PDB parsing, ligand vs additive vs peptide chain    [pure]
     box.py             search-box geometry and RMSD                       [pure]
+    decoys.py          property-matched decoy selection and balancing     [pure]
+    enrichment.py      AUC, EF, BEDROC; three-state verdict              [numpy]
+    screen.py          batch docking, attrition accounting, sharding      [pure]
     engine.py          AutoDock Vina, with its error attached      [vina edge]
   chem/                                                            [RDKit edge]
     standardize.py     salt stripping, neutralisation, InChIKey identity
@@ -244,6 +247,60 @@ Nearest-neighbour RMSD against a small reference set is lenient, so the error
 flattered the result instead of exposing itself. The pipeline now detects
 peptide-ligand chains, strips them from the receptor, and refuses to redock
 against a fragment.
+
+## Virtual screening: measured, then used accordingly
+
+Before docking could triage the generated candidates the QSAR model could not
+score, a prior question needed answering: **does docking separate actives from
+inactives on this target at all?** If not, triage adds nothing and a ranked list
+is noise.
+
+**The experiment.** 40 potent BACE1 actives (pIC50 ≥ 8) against 50 decoys drawn
+from the weakly-active end of the same curated ChEMBL set, matched on molecular
+weight, logP, hydrogen bonding, flexibility and charge, and filtered to below
+0.25 Tanimoto from every active. Docked into 4FRS, one receptor, one box,
+38 CPU-minutes across six shards.
+
+| | |
+|---|---|
+| AUC-ROC | **0.731** [0.617, 0.831] |
+| BEDROC (α=20) | 0.359 |
+| EF 1% | 0.00 (top 1% is one compound) |
+| Mean score | actives −9.09, decoys −8.26 kcal/mol |
+
+The lower bound sits well above random, so docking does carry information about
+this site. But BEDROC of 0.36 and an empty top 1% say the *early* ranking is
+poor: it separates the groups on average and does not concentrate actives at the
+top, which is where a screen actually buys compounds. That is consistent with
+the redocking result — the score discriminates weakly at fine resolution.
+
+So `triage_candidates` filters against the actives' score distribution and
+deliberately leaves the survivors unordered.
+
+**Using weak binders as decoys** is a harder control than DUD-E's property-matched
+library compounds: they are measured against this target, so there is no
+contamination from untested binders, but they often share the actives' chemotype.
+Enrichment here reads lower than a published DUD-E figure for the same target,
+which is the honest direction for the bias to run.
+
+**Three method errors this experiment produced,** recorded because each returned
+a believable wrong answer:
+
+1. The first run docked 8 actives against 8 decoys and reported AUC 0.641
+   [0.317, 0.900] as *"docking does not separate the groups"*. An interval
+   reaching from well below random to strong means the sample answered nothing.
+   `separates == False` conflated "no signal" with "too small to see one", which
+   is absence of evidence reported as evidence of absence. There is now a third
+   verdict, `inconclusive`, and `compounds_needed` estimates the sample a
+   conclusion would take — 68 per group, against the 8 used.
+2. Per-pair property matching passed while the **group** means differed by
+   34.7 Da, because the matcher could not fill every quota and the decoys it
+   found skewed small. A gap that size is enough for Vina's size bias to
+   manufacture enrichment. `balance_selection` now trims to the group-level gap.
+3. Striding the interleaved ligand list across six shards starved half of them
+   of actives — round-robin interleaving is periodic, so a six-way stride lands
+   on a fixed phase. The pooled result survived only because every shard
+   finished.
 
 ## What this pipeline cannot do
 
