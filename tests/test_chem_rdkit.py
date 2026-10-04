@@ -630,9 +630,14 @@ class TestGeneration(unittest.TestCase):
     def test_an_all_anchor_fragment_set_falls_back_to_filtering(self) -> None:
         """With nothing motif-free to build with, the constraint cannot be structural.
 
-        Every fragment of these actives contains an aromatic ring, so seeding on it
-        leaves an empty reagent pool. The honest response is to say the guarantee is
-        a filter rather than a construction -- not to proceed as though it held.
+        The motif used is carbon, which every BRICS fragment of an organic molecule
+        contains -- so the reagent pool is empty and there is nothing to grow a seed
+        with. The honest response is to say the guarantee is a filter rather than a
+        construction, not to proceed as though it held.
+
+        An earlier version of this test used ``a1aaaaa1`` on the assumption that every
+        fragment here is aromatic. Four are not, so the pool was never degenerate and
+        the test was asserting against a scenario it had not created.
         """
         from chemdisco.generate import GenerationPolicy, generate_candidates
 
@@ -641,7 +646,7 @@ class TestGeneration(unittest.TestCase):
             policy=GenerationPolicy(
                 max_generated=60,
                 reject_brenk=False,
-                anchor_smarts=("a1aaaaa1",),
+                anchor_smarts=("[#6]",),
                 max_anchor_copies=1,
             ),
             seed=5,
