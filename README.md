@@ -118,6 +118,10 @@ chemdisco/
     applicability.py   three applicability-domain definitions          [numpy]
     evaluate.py        metrics with bootstrap intervals                [numpy]
     model.py           RF / GBM / Ridge returning Quantity objects    [sklearn]
+  dock/
+    pdb.py             PDB parsing, ligand vs additive vs peptide chain    [pure]
+    box.py             search-box geometry and RMSD                       [pure]
+    engine.py          AutoDock Vina, with its error attached      [vina edge]
   chem/                                                            [RDKit edge]
     standardize.py     salt stripping, neutralisation, InChIKey identity
     descriptors.py     ECFP4 fingerprints and interpretable descriptors
@@ -197,6 +201,50 @@ So prion disease is an excellent motivation and a poor first validation target: 
 pipeline validated only on scarce, cell-based data has no way to distinguish a
 working model from a broken one. Validate on BACE1, then move.
 
+## Docking, and what it was measured to be worth
+
+The predecessor's "docking" was `-5.0 - molecular_weight/100 + random.uniform(-2, 2)`,
+reported in kcal/mol. It was removed rather than ported. The replacement runs
+AutoDock Vina against real PDB structures, and its reporting is shaped by what
+redocking on this target actually showed.
+
+**Redocking 4FRS** (BACE1 at 1.70 Å, 25-heavy-atom aminohydantoin inhibitor):
+
+| | exhaustiveness 16 | exhaustiveness 64 |
+|---|---|---|
+| Top-ranked pose | 4.19 Å | 4.22 Å |
+| Best pose found | 1.78 Å (rank 5) | 1.79 Å (rank 3) |
+| Poses under 2 Å | 2 of 9 | 4 of 9 |
+| Score spread | 1.23 kcal/mol | 0.86 kcal/mol |
+
+Quadrupling the search effort found more correct poses and still ranked a 4.2 Å
+pose first. That separates the two possible explanations: the **search** finds
+the right answer, and the **scoring function** cannot pick it out. More compute
+does not fix it.
+
+The spread across all nine poses is well inside Vina's own ~2.5 kcal/mol error,
+so the ranking between them is not determined by the score at all.
+`DockingResult.pose_ranking_is_determined` returns False for exactly this case
+and the report says so in words. The practical consequence is direct: on this
+target, docking scores must not order candidates.
+
+So docking answers "could this molecule occupy this pocket, in what orientation"
+much better than "how tightly does it bind". Scores are `PREDICTED` quantities
+carrying 2.5 kcal/mol as their uncertainty and `in_domain=None`, which keeps them
+out of any ranked list by themselves.
+
+**A bug worth recording**, because it is the kind that produces a believable
+wrong answer. The first redocking attempt used 1FKN and returned a tidy PARTIAL
+verdict that meant nothing. 1FKN's inhibitor is OM99-2, an octapeptide deposited
+as *polymer chains* C and D — ATOM records, indistinguishable from receptor by a
+HETATM filter — with only its non-standard hydroxyethylene isostere written as
+the HETATM residue `1OL`. So the run docked into a pocket still occupied by its
+own ligand, and measured RMSD against a 13-atom fragment of a 60-atom molecule.
+Nearest-neighbour RMSD against a small reference set is lenient, so the error
+flattered the result instead of exposing itself. The pipeline now detects
+peptide-ligand chains, strips them from the receptor, and refuses to redock
+against a fragment.
+
 ## What this pipeline cannot do
 
 Stated here so it does not have to be inferred:
@@ -205,9 +253,10 @@ Stated here so it does not have to be inferred:
   chemical space spanned by the input actives. It will not discover a novel
   chemotype, and for a target with few known actives the reachable space is
   correspondingly small.
-- **There is no docking yet.** The previous project's "docking" was a property
-  heuristic plus noise; it has been removed rather than reimplemented. Real
-  docking against PDB structures (AutoDock Vina or smina) is the next component.
+- **Cross-docking is not implemented.** Redocking puts a ligand back into the
+  receptor conformation it induced, which is the easiest version of the problem.
+  Whether a setup places a *different* ligand correctly is a harder question that
+  cross-docking measures and this pipeline does not yet ask.
 - **ADMET and toxicity prediction are absent.** The previous project's versions
   were invented formulas with no experimental basis. Honest versions require
   curated experimental datasets per endpoint, which is a substantial separate
