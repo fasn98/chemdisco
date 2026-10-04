@@ -46,6 +46,7 @@ import pathlib
 import sys
 import time
 import urllib.request
+from dataclasses import replace
 
 import numpy as np
 
@@ -245,10 +246,45 @@ def build_inputs(args) -> dict | None:
             )
 
     heading("2. Generating candidates")
-    print(f"  policy: {BACE1_POLICY.describe()}")
+
+    # The anchoring motif is MEASURED here, not declared. The feature profile is
+    # built before generation so the generator can be constrained by whatever
+    # separates this target's actives from unrelated chemistry -- amidine on BACE1,
+    # something else on a kinase, nothing at all where no feature discriminates.
+    #
+    # Without the constraint, the previous run docked 60 candidates, 15 reached the
+    # reference median ligand efficiency, and all 15 carried the amidine twice. In a
+    # fragment space built from potent inhibitors, joining two warheads is how the
+    # builder makes a compact molecule that scores well.
+    from chemdisco.generate.pharmacophore import FEATURE_PATTERNS, profile_actives
+
+    anchor_smarts: tuple[str, ...] = ()
+    profile = profile_actives(
+        [p.smiles for p in reference], background_smiles=background
+    )
+    if profile.can_discriminate:
+        anchor_smarts = tuple(
+            FEATURE_PATTERNS[name]
+            for name in profile.most_discriminating
+            if name in FEATURE_PATTERNS
+        )
+        print(
+            "  anchoring motif(s) measured from the actives: "
+            + ", ".join(profile.most_discriminating)
+        )
+    else:
+        print(
+            "  no anchoring motif could be measured, so generation is NOT "
+            "constrained to carry one. Products may fill the pocket with nothing "
+            "to bind with, and nothing downstream will catch it either -- the "
+            "conserved-feature check is withheld for the same reason."
+        )
+
+    policy = replace(BACE1_POLICY, anchor_smarts=anchor_smarts)
+    print(f"  policy: {policy.describe()}")
     generation = generate_candidates(
         [p.smiles for p in seeds],
-        policy=BACE1_POLICY,
+        policy=policy,
         reference_smiles=[p.smiles for p in points],
         seed=args.seed,
     )
@@ -298,6 +334,11 @@ def build_inputs(args) -> dict | None:
         "background_smiles": background,
         "background_summary": background_summary,
         "n_fragments": generation.n_fragments,
+        "anchor_motifs": list(profile.most_discriminating) if anchor_smarts else [],
+        "n_anchor_fragments": generation.n_anchor_fragments,
+        "n_plain_fragments": generation.n_plain_fragments,
+        "n_anchor_escapes": generation.n_anchor_escapes,
+        "n_anchor_lost": generation.n_anchor_lost,
         "n_generated": generation.n_generated,
         "policy_audit_pass_rate": (
             generation.policy_audit.pass_rate if generation.policy_audit else None
@@ -403,6 +444,40 @@ def combine(directory: pathlib.Path, output: str) -> int:
         f"\nPooled: {len(reference_scores)} reference actives, "
         f"{len(candidates)} candidates, {seconds / 60:.0f} CPU-minutes"
     )
+
+    first = json.loads(shards[0].read_text())
+    if first.get("anchor_motifs"):
+        heading("How generation was constrained")
+        print(
+            "  anchoring motif(s), measured from the actives: "
+            + ", ".join(first["anchor_motifs"])
+        )
+        print(
+            f"  fragment pool: {first.get('n_anchor_fragments', 0)} carrying the "
+            f"motif, used as build seeds; {first.get('n_plain_fragments', 0)} "
+            "motif-free, used as reagents. Every product therefore grows from "
+            "exactly one warhead by construction rather than being filtered "
+            "afterwards -- the filter version spends the generation budget on "
+            "artefacts, which is how a previous run reached 15 artefacts and an "
+            "empty shortlist."
+        )
+        if first.get("n_anchor_escapes"):
+            print(
+                f"  {first['n_anchor_escapes']} product(s) carried the motif twice "
+                "anyway and were rejected: joining two motif-free fragments can "
+                "create it across the new bond. Counted because a structural "
+                "guarantee that is never verified is only a claim."
+            )
+        if first.get("n_anchor_lost"):
+            print(
+                f"  {first['n_anchor_lost']} product(s) grew from an anchor "
+                "fragment and lost the motif in the process, and were rejected."
+            )
+    else:
+        print(
+            "\n  Generation was NOT constrained to carry an anchoring motif: none "
+            "could be measured from the actives against the background."
+        )
 
     profiles = [p for p in (json.loads(s.read_text()).get("feature_profile") for s in shards) if p]
     if profiles:
@@ -941,6 +1016,11 @@ def main() -> int:
                     },
                 },
                 "n_fragments": inputs["n_fragments"],
+                "anchor_motifs": inputs["anchor_motifs"],
+                "n_anchor_fragments": inputs["n_anchor_fragments"],
+                "n_plain_fragments": inputs["n_plain_fragments"],
+                "n_anchor_escapes": inputs["n_anchor_escapes"],
+                "n_anchor_lost": inputs["n_anchor_lost"],
                 "policy_audit_pass_rate": inputs["policy_audit_pass_rate"],
             },
             indent=2,

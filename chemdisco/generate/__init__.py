@@ -6,8 +6,10 @@ from .brics import (
     GenerationReport,
     PolicyAudit,
     audit_policy,
+    count_anchors,
     decompose_to_fragments,
     generate_candidates,
+    partition_fragments,
     score_candidates,
 )
 from .pharmacophore import (
@@ -37,10 +39,12 @@ __all__ = [
     "PolicyAudit",
     "audit_policy",
     "check_candidate",
+    "count_anchors",
     "decompose_to_fragments",
     "feature_counts",
     "features_of",
     "generate_candidates",
+    "partition_fragments",
     "profile_actives",
     "score_candidates",
     "screen_candidates",

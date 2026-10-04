@@ -81,6 +81,25 @@ class GenerationPolicy:
         diversity_threshold: Collapse the surviving set so no two members exceed
             this similarity. Fifty variations on one molecule are not fifty
             candidates.
+        anchor_smarts: SMARTS for the motif that engages the target, measured
+            rather than assumed -- in practice the most discriminating feature
+            from :mod:`chemdisco.generate.pharmacophore`. Supplying it turns on the
+            constraint described in :func:`_build_products`: fragments carrying the
+            motif become BRICS *seeds* and only motif-free fragments are offered as
+            reagents, so a product grows from exactly one anchor.
+
+            This exists because of a measured result, not a worry. On BACE1, every
+            one of the 15 candidates that reached the reference median ligand
+            efficiency carried the amidine twice -- 15 of 15. In a fragment space
+            built from potent inhibitors, joining two warheads is simply how the
+            builder makes a compact molecule that scores well, since Vina rewards
+            buried polar contacts and each warhead brings its own.
+        max_anchor_copies: Reject a product carrying the motif more often than
+            this. The seeding above makes it structurally unlikely rather than
+            impossible -- joining two motif-free fragments can create the motif
+            across the new bond -- so products are still counted and the number
+            that slip through is reported. A constraint that is only asserted is
+            not a constraint.
     """
 
     max_generated: int = DEFAULT_MAX_GENERATED
@@ -92,15 +111,24 @@ class GenerationPolicy:
     require_novelty: bool = True
     near_duplicate_threshold: float = 0.85
     diversity_threshold: float = 0.85
+    anchor_smarts: tuple[str, ...] = ()
+    max_anchor_copies: int = 1
 
     def describe(self) -> str:
+        anchor = (
+            f"anchor_smarts={len(self.anchor_smarts)} pattern(s), "
+            f"max_anchor_copies={self.max_anchor_copies}"
+            if self.anchor_smarts
+            else "anchor_smarts=none (products may carry any number of warheads)"
+        )
         return (
             f"max_generated={self.max_generated}; "
             f"heavy_atoms={self.min_heavy_atoms}-{self.max_heavy_atoms}; "
             f"max_sascore={self.max_sascore}; "
             f"reject_pains={self.reject_pains}; reject_brenk={self.reject_brenk}; "
             f"require_novelty={self.require_novelty}; "
-            f"diversity_threshold={self.diversity_threshold}"
+            f"diversity_threshold={self.diversity_threshold}; "
+            f"{anchor}"
         )
 
 
@@ -175,6 +203,13 @@ class GenerationReport:
     n_fragments: int = 0
     n_generated: int = 0
     attrition: dict[str, int] = field(default_factory=dict)
+    #: How the fragment pool split for the anchor constraint, and how often the
+    #: constraint was not honoured by construction. Both are reported because a
+    #: structural guarantee that is never checked is only a claim.
+    n_anchor_fragments: int = 0
+    n_plain_fragments: int = 0
+    n_anchor_escapes: int = 0
+    n_anchor_lost: int = 0
     # PolicyAudit is defined below; `from __future__ import annotations` makes
     # the forward reference resolve without quoting it.
     policy_audit: PolicyAudit | None = None
@@ -195,6 +230,25 @@ class GenerationReport:
                 self.attrition.items(), key=lambda kv: -kv[1]
             ):
                 lines.append(f"  {count:>6} by {stage}")
+        if self.n_anchor_fragments or self.n_plain_fragments:
+            lines.append(
+                f"Anchor split: {self.n_anchor_fragments} fragment(s) carry the "
+                f"motif, {self.n_plain_fragments} do not."
+            )
+            if self.n_anchor_escapes:
+                lines.append(
+                    f"  {self.n_anchor_escapes} product(s) carried the motif more "
+                    "than allowed despite the seeded build -- joining two "
+                    "motif-free fragments can create it across the new bond. "
+                    "Rejected, and counted here because a structural guarantee "
+                    "that is never verified is only a claim."
+                )
+            if self.n_anchor_lost:
+                lines.append(
+                    f"  {self.n_anchor_lost} product(s) grew from an anchor "
+                    "fragment and came out without the motif: BRICS cut through "
+                    "it, or the reaction consumed it. Rejected."
+                )
         lines.append(f"Retained: {len(self.candidates)} candidates.")
 
         if self.policy_audit is not None:
@@ -291,8 +345,59 @@ def decompose_to_fragments(smiles_list: Sequence[str]) -> tuple[set[str], list[s
     return fragments, errors
 
 
+def _compile_anchors(anchor_smarts: Sequence[str]) -> list[object]:
+    """Compile anchor SMARTS, skipping any that will not parse."""
+    require_rdkit()
+    compiled = []
+    for smarts in anchor_smarts:
+        pattern = Chem.MolFromSmarts(smarts)
+        if pattern is not None:
+            compiled.append(pattern)
+    return compiled
+
+
+def count_anchors(smiles: str, anchor_patterns: Sequence[object]) -> int:
+    """How many times the anchoring motif appears in a structure.
+
+    Counted, not detected. Two amidines is the signature of two inhibitors joined
+    end to end, and a presence check reads that as "has the motif" and approves it.
+    """
+    require_rdkit()
+    mol = Chem.MolFromSmiles((smiles or "").strip())
+    if mol is None:
+        return 0
+    return sum(
+        len(mol.GetSubstructMatches(pattern, uniquify=True))  # type: ignore[arg-type]
+        for pattern in anchor_patterns
+    )
+
+
+def partition_fragments(
+    fragments: Sequence[str], anchor_patterns: Sequence[object]
+) -> tuple[list[str], list[str]]:
+    """Split fragments into those carrying the anchoring motif and the rest.
+
+    Returns ``(anchor_bearing, motif_free)``, each sorted so the split is
+    reproducible. A fragment carries BRICS attachment-point dummies, which do not
+    interfere with the substructure match.
+    """
+    require_rdkit()
+    anchored: list[str] = []
+    plain: list[str] = []
+    for fragment in sorted(fragments):
+        if count_anchors(fragment, anchor_patterns) > 0:
+            anchored.append(fragment)
+        else:
+            plain.append(fragment)
+    return anchored, plain
+
+
 def _build_products(
-    fragments: Sequence[str], *, max_generated: int, seed: int
+    fragments: Sequence[str],
+    *,
+    max_generated: int,
+    seed: int,
+    seeds: Sequence[str] | None = None,
 ) -> list[str]:
     """Draw products from the BRICS builder, capped and shuffled.
 
@@ -323,6 +428,19 @@ def _build_products(
     Returns a list rather than a generator for the same reason: the seeded window
     has to cover the whole enumeration, and a lazy generator would leave the
     global state seeded while the caller does unrelated work between products.
+
+    Args:
+        fragments: The reagent pool the builder draws from.
+        max_generated: Ceiling on products returned.
+        seed: Controls the fragment shuffle and the builder's own scrambling.
+        seeds: Starting points. BRICS grows each product outward from a seed using
+            the reagent pool, so passing the anchor-bearing fragments here and only
+            motif-free fragments as ``fragments`` constrains every product to
+            exactly one anchor **by construction**, rather than generating
+            double-warhead molecules and discarding them afterwards. The
+            distinction is not cosmetic: the cap is applied to what the builder
+            emits, so a pool that mostly yields artefacts spends the whole budget
+            on them -- on BACE1 it produced 15 artefacts and 0 candidates.
     """
     require_rdkit()
     rng = random.Random(seed)
@@ -335,14 +453,36 @@ def _build_products(
         if mol is not None:
             mols.append(mol)
 
-    if len(mols) < 2:
+    seed_mols: list[object] | None = None
+    if seeds:
+        shuffled_seeds = list(seeds)
+        rng.shuffle(shuffled_seeds)
+        seed_mols = [
+            mol
+            for mol in (Chem.MolFromSmiles(s) for s in shuffled_seeds)
+            if mol is not None
+        ]
+        if not seed_mols:
+            return []
+        # With seeds supplied the reagent pool may legitimately hold a single
+        # fragment: one seed plus one reagent is a product.
+        if not mols:
+            return []
+    elif len(mols) < 2:
         return []
 
     products: list[str] = []
     state = random.getstate()
     random.seed(seed)
     try:
-        for product in BRICS.BRICSBuild(mols, scrambleReagents=True, maxDepth=3):
+        builder = (
+            BRICS.BRICSBuild(
+                mols, seeds=seed_mols, scrambleReagents=True, maxDepth=3
+            )
+            if seed_mols is not None
+            else BRICS.BRICSBuild(mols, scrambleReagents=True, maxDepth=3)
+        )
+        for product in builder:
             if len(products) >= max_generated:
                 break
             try:
@@ -582,11 +722,56 @@ def generate_candidates(
         key for key in (inchikey_of(s) for s in reference) if key is not None
     }
 
+    # The anchor constraint, applied to the fragment pool rather than to the
+    # output. Anchor-bearing fragments become seeds and only motif-free fragments
+    # are offered as reagents, so a product grows outward from exactly one
+    # warhead. Generating double-warhead molecules and filtering them afterwards
+    # is not equivalent: the cap applies to what the builder emits, so on BACE1 the
+    # whole budget went to artefacts and the shortlist came out empty.
+    anchor_patterns = _compile_anchors(policy.anchor_smarts)
+    reagents = sorted(fragments)
+    anchor_seeds: list[str] | None = None
+
+    if anchor_patterns:
+        anchored, plain = partition_fragments(fragments, anchor_patterns)
+        report.n_anchor_fragments = len(anchored)
+        report.n_plain_fragments = len(plain)
+        if not anchored:
+            report.notes.append(
+                f"No fragment carries the anchoring motif, from "
+                f"{len(fragments)} fragments. Either the motif is wrong for this "
+                "chemistry or BRICS cut through it -- a motif spanning a BRICS "
+                "bond ends up split across two fragments and present in neither. "
+                "Generation proceeds unconstrained and the products are NOT "
+                "guaranteed to carry a warhead."
+            )
+        elif not plain:
+            report.notes.append(
+                f"Every one of the {len(anchored)} fragments carries the "
+                "anchoring motif, so there is nothing motif-free to build with "
+                "and the constraint cannot be applied structurally. Generation "
+                "proceeds unconstrained; products carrying the motif more than "
+                f"{policy.max_anchor_copies} time(s) are still rejected, but by a "
+                "filter rather than by construction."
+            )
+        else:
+            anchor_seeds = anchored
+            reagents = plain
+            report.notes.append(
+                f"Anchor constraint active: {len(anchored)} motif-bearing "
+                f"fragment(s) used as build seeds, {len(plain)} motif-free "
+                "fragment(s) as reagents. Every product therefore grows from "
+                "exactly one warhead by construction."
+            )
+
     seen: set[str] = set()
     survivors: list[Candidate] = []
 
     for product_smiles in _build_products(
-        sorted(fragments), max_generated=policy.max_generated, seed=seed
+        reagents,
+        max_generated=policy.max_generated,
+        seed=seed,
+        seeds=anchor_seeds,
     ):
         report.n_generated += 1
 
@@ -613,6 +798,26 @@ def generate_candidates(
         if heavy > policy.max_heavy_atoms:
             report.record(f"too large (over {policy.max_heavy_atoms} heavy atoms)")
             continue
+
+        if anchor_patterns:
+            copies = count_anchors(result.smiles, anchor_patterns)
+            # Checked even when the seeding should have made it impossible. Joining
+            # two motif-free fragments can create the motif across the new bond, and
+            # a constraint nobody verifies is a claim rather than a constraint.
+            if copies > policy.max_anchor_copies:
+                report.n_anchor_escapes += 1
+                report.record(
+                    f"carries the anchoring motif {policy.max_anchor_copies + 1}+ "
+                    "times (two inhibitors joined)"
+                )
+                continue
+            if copies == 0 and anchor_seeds is not None:
+                # Under the seeded build every product starts from an anchor, so a
+                # product without one means BRICS cut the motif or the reaction
+                # consumed it. Counted rather than assumed away.
+                report.n_anchor_lost += 1
+                report.record("lost the anchoring motif during recombination")
+                continue
 
         if policy.require_novelty and result.inchikey in known_keys:
             report.record("already a known compound")

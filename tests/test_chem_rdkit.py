@@ -537,6 +537,120 @@ class TestGeneration(unittest.TestCase):
         )
         self.assertEqual(first.n_generated, second.n_generated)
 
+    def test_anchors_are_counted_not_detected(self) -> None:
+        from chemdisco.generate.brics import _compile_anchors, count_anchors
+
+        patterns = _compile_anchors(["[Cl]"])
+        self.assertEqual(count_anchors("Clc1ccccc1", patterns), 1)
+        self.assertEqual(count_anchors("Clc1ccc(Cl)cc1", patterns), 2)
+        self.assertEqual(count_anchors("c1ccccc1", patterns), 0)
+        # A structure that does not parse is zero, not an exception: generation
+        # feeds this unvalidated output from a recombination step.
+        self.assertEqual(count_anchors("not a molecule", patterns), 0)
+
+    def test_fragments_partition_by_the_anchoring_motif(self) -> None:
+        from chemdisco.generate import decompose_to_fragments, partition_fragments
+        from chemdisco.generate.brics import _compile_anchors
+
+        fragments, _ = decompose_to_fragments(self.ACTIVES)
+        anchored, plain = partition_fragments(fragments, _compile_anchors(["[Cl]"]))
+        self.assertTrue(anchored, "the active set contains chlorinated compounds")
+        self.assertTrue(plain)
+        self.assertEqual(len(anchored) + len(plain), len(fragments))
+        # Sorted, so the split is reproducible across shards.
+        self.assertEqual(anchored, sorted(anchored))
+        self.assertEqual(plain, sorted(plain))
+
+    def test_the_anchor_constraint_holds_by_construction(self) -> None:
+        """No product may carry the anchoring motif twice.
+
+        The motif here is chlorine, which is not chemistry -- it is a stand-in that
+        splits this small fragment set into carriers and non-carriers so the
+        machinery can be tested. What it stands for is the real finding: on BACE1,
+        all 15 candidates that reached the reference median ligand efficiency
+        carried the amidine twice. In a fragment space built from potent inhibitors,
+        joining two warheads is how the builder makes a compact molecule that scores
+        well, and filtering afterwards does not help because the generation cap is
+        spent on the artefacts.
+        """
+        from chemdisco.generate import GenerationPolicy, generate_candidates
+        from chemdisco.generate.brics import _compile_anchors, count_anchors
+
+        report = generate_candidates(
+            self.ACTIVES,
+            policy=GenerationPolicy(
+                max_generated=300,
+                min_heavy_atoms=8,
+                reject_brenk=False,
+                anchor_smarts=("[Cl]",),
+            ),
+            seed=3,
+        )
+        self.assertGreater(report.n_anchor_fragments, 0)
+        self.assertGreater(report.n_plain_fragments, 0)
+        self.assertTrue(
+            any("Anchor constraint active" in note for note in report.notes)
+        )
+
+        patterns = _compile_anchors(["[Cl]"])
+        for candidate in report.candidates:
+            self.assertEqual(
+                count_anchors(candidate.smiles, patterns),
+                1,
+                f"{candidate.smiles} does not carry exactly one anchoring motif",
+            )
+
+    def test_a_motif_no_fragment_carries_is_reported_not_silently_ignored(self) -> None:
+        """BRICS can cut straight through the motif.
+
+        A bond inside the anchoring group is often exactly where BRICS cuts -- amide
+        C-N bonds are rule 1 -- which leaves the motif split across two fragments
+        and present in neither. The generator then has no seed to build from. That
+        must be stated, because it means the output is not guaranteed to carry a
+        warhead and the reader would otherwise assume it is.
+        """
+        from chemdisco.generate import GenerationPolicy, generate_candidates
+
+        report = generate_candidates(
+            self.ACTIVES,
+            policy=GenerationPolicy(
+                max_generated=60, anchor_smarts=("[Au]",)  # in no fragment
+            ),
+            seed=4,
+        )
+        self.assertEqual(report.n_anchor_fragments, 0)
+        self.assertTrue(
+            any("No fragment carries the anchoring motif" in n for n in report.notes)
+        )
+        self.assertTrue(
+            any("NOT\nguaranteed" in n or "NOT guaranteed" in n for n in report.notes),
+            "the absence of the guarantee has to be stated, not implied",
+        )
+
+    def test_an_all_anchor_fragment_set_falls_back_to_filtering(self) -> None:
+        """With nothing motif-free to build with, the constraint cannot be structural.
+
+        Every fragment of these actives contains an aromatic ring, so seeding on it
+        leaves an empty reagent pool. The honest response is to say the guarantee is
+        a filter rather than a construction -- not to proceed as though it held.
+        """
+        from chemdisco.generate import GenerationPolicy, generate_candidates
+
+        report = generate_candidates(
+            self.ACTIVES,
+            policy=GenerationPolicy(
+                max_generated=60,
+                reject_brenk=False,
+                anchor_smarts=("a1aaaaa1",),
+                max_anchor_copies=1,
+            ),
+            seed=5,
+        )
+        self.assertEqual(report.n_plain_fragments, 0)
+        self.assertTrue(
+            any("cannot be applied structurally" in n for n in report.notes)
+        )
+
     def test_generation_restores_the_ambient_random_state(self) -> None:
         """Seeding globally must not reach outside this call.
 
