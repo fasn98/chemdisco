@@ -498,6 +498,66 @@ class TestGeneration(unittest.TestCase):
             "a target with too little chemistry to recombine must say so plainly",
         )
 
+    def test_generation_ignores_the_ambient_random_state(self) -> None:
+        """The same seed must give the same candidates in any process.
+
+        This reproduces a real failure rather than guarding a hypothetical.
+        ``BRICS.BRICSBuild(scrambleReagents=True)`` shuffles using the ``random``
+        module's *global* state, so passing a private ``random.Random(seed)``
+        controlled the fragment order and nothing else. With the output capped,
+        two processes drew different products from identical fragments.
+
+        It went unnoticed because the symptom looked like docking noise. Two full
+        pipeline runs on an identical curated dataset -- same curation signature,
+        5091 compounds, 572 actives -- produced different candidate lists, and the
+        six shards of a single run each generated their own list while the combine
+        step pooled them as one experiment.
+
+        Perturbing the global state between two seeded calls is exactly what a
+        fresh process does.
+        """
+        import random
+
+        from chemdisco.generate import GenerationPolicy, generate_candidates
+
+        policy = GenerationPolicy(max_generated=60)
+
+        random.seed(1)
+        first = generate_candidates(self.ACTIVES, policy=policy, seed=7)
+
+        random.seed(999_999)
+        second = generate_candidates(self.ACTIVES, policy=policy, seed=7)
+
+        self.assertEqual(
+            [c.smiles for c in first.candidates],
+            [c.smiles for c in second.candidates],
+            "generation is not reproducible: the candidate list depends on "
+            "ambient randomness, so no two shards and no two runs are the same "
+            "experiment",
+        )
+        self.assertEqual(first.n_generated, second.n_generated)
+
+    def test_generation_restores_the_ambient_random_state(self) -> None:
+        """Seeding globally must not reach outside this call.
+
+        The fix sets the global generator, so it also has to put it back. A module
+        that silently reseeds the process would make every other consumer of
+        ``random`` reproducible by accident -- including, eventually, something
+        that should not be.
+        """
+        import random
+
+        from chemdisco.generate import GenerationPolicy, generate_candidates
+
+        random.seed(4242)
+        expected = [random.random() for _ in range(3)]
+
+        random.seed(4242)
+        generate_candidates(
+            self.ACTIVES, policy=GenerationPolicy(max_generated=20), seed=7
+        )
+        self.assertEqual([random.random() for _ in range(3)], expected)
+
 
 if __name__ == "__main__":
     unittest.main()

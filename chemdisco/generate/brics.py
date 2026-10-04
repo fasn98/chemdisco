@@ -40,7 +40,7 @@ something important about the fragment set.
 from __future__ import annotations
 
 import random
-from collections.abc import Iterator, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import ClassVar
 
@@ -293,7 +293,7 @@ def decompose_to_fragments(smiles_list: Sequence[str]) -> tuple[set[str], list[s
 
 def _build_products(
     fragments: Sequence[str], *, max_generated: int, seed: int
-) -> Iterator[str]:
+) -> list[str]:
     """Draw products from the BRICS builder, capped and shuffled.
 
     The builder enumerates in a fixed order that systematically favours
@@ -304,6 +304,25 @@ def _build_products(
     The randomness here selects which structures to *propose*. It never touches a
     score or a measurement, which is why this module appears on the randomness
     allowlist in ``tests/test_no_fabrication.py``.
+
+    **Seeding the global generator is not optional.** ``BRICS.BRICSBuild`` with
+    ``scrambleReagents=True`` shuffles its reagents and reaction sets using the
+    ``random`` module's *global* state, not any generator passed to it. A private
+    ``random.Random(seed)`` therefore controls the fragment order and nothing
+    else, and the builder's enumeration order comes from OS entropy -- so with the
+    cap applied, two runs draw different products from the same fragments.
+
+    That was invisible and expensive. Two runs of the full pipeline on an
+    identical curated dataset (same curation signature, 5091 compounds, 572
+    actives) produced different candidate lists; worse, the six shards of a single
+    run each generated their own list while the combine step pooled them as one
+    experiment. The global state is seeded here and restored afterwards, so the
+    determinism is local to this function and nothing else in the process has its
+    randomness changed underneath it.
+
+    Returns a list rather than a generator for the same reason: the seeded window
+    has to cover the whole enumeration, and a lazy generator would leave the
+    global state seeded while the caller does unrelated work between products.
     """
     require_rdkit()
     rng = random.Random(seed)
@@ -317,24 +336,28 @@ def _build_products(
             mols.append(mol)
 
     if len(mols) < 2:
-        return
+        return []
 
-    count = 0
+    products: list[str] = []
+    state = random.getstate()
+    random.seed(seed)
     try:
         for product in BRICS.BRICSBuild(mols, scrambleReagents=True, maxDepth=3):
-            if count >= max_generated:
-                return
+            if len(products) >= max_generated:
+                break
             try:
                 product.UpdatePropertyCache(strict=False)
                 Chem.SanitizeMol(product)
-                yield Chem.MolToSmiles(product)
+                products.append(Chem.MolToSmiles(product))
             except Exception:
                 # Recombination can produce chemically invalid structures; they
                 # are skipped silently here and counted by the caller.
                 continue
-            count += 1
     except Exception:
-        return
+        pass
+    finally:
+        random.setstate(state)
+    return products
 
 
 @dataclass(frozen=True, slots=True)
