@@ -137,8 +137,8 @@ def combine(directory: pathlib.Path, output: str) -> int:
     )
     print(enrichment.describe())
 
-    active_scores = [s for s, label in zip(scores, labels) if label == 1]
-    decoy_scores = [s for s, label in zip(scores, labels) if label == 0]
+    active_scores = [s for s, label in zip(scores, labels, strict=True) if label == 1]
+    decoy_scores = [s for s, label in zip(scores, labels, strict=True) if label == 0]
     print(
         f"\n  mean score: actives {np.mean(active_scores):.2f}, "
         f"decoys {np.mean(decoy_scores):.2f} kcal/mol "
@@ -508,8 +508,8 @@ def main() -> int:
     )
     print(enrichment.describe())
 
-    active_scores = [s for s, label in zip(scores, scored_labels) if label == 1]
-    decoy_scores = [s for s, label in zip(scores, scored_labels) if label == 0]
+    active_scores = [s for s, label in zip(scores, scored_labels, strict=True) if label == 1]
+    decoy_scores = [s for s, label in zip(scores, scored_labels, strict=True) if label == 0]
     print(
         f"\n  mean score: actives {np.mean(active_scores):.2f}, "
         f"decoys {np.mean(decoy_scores):.2f} kcal/mol "

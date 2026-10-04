@@ -16,7 +16,6 @@ import numpy as np
 from chemdisco.dock.decoys import (
     DEFAULT_TOLERANCES,
     MAX_DECOY_SIMILARITY,
-    DecoySelection,
     describe_property_gap,
     property_gap,
     select_decoys,
