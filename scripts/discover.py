@@ -272,6 +272,39 @@ def combine(directory: pathlib.Path, output: str) -> int:
         f"{len(candidates)} candidates, {seconds / 60:.0f} CPU-minutes"
     )
 
+    profiles = [p for p in (json.loads(s.read_text()).get("feature_profile") for s in shards) if p]
+    if profiles:
+        profile = profiles[0]
+        heading("The feature profile the candidates were judged against")
+        print(
+            f"  built from {profile['n_actives']} actives against "
+            f"{profile['n_background']} background compounds"
+        )
+        print(f"  conserved: {', '.join(profile['conserved']) or 'none'}")
+        print(
+            f"  most discriminating: "
+            f"{', '.join(profile['most_discriminating']) or 'none'}"
+        )
+        if profile["ubiquitous"]:
+            print(f"  set aside as ubiquitous: {', '.join(profile['ubiquitous'])}")
+        print("\n  prevalence (actives vs background):")
+        for name in profile["most_discriminating"]:
+            actives_pct = profile["prevalence"].get(name, 0.0)
+            background_pct = profile["background_prevalence"].get(name, 0.0)
+            ratio = (
+                "absent from background"
+                if background_pct == 0
+                else f"{actives_pct / background_pct:.1f}x"
+            )
+            print(f"    {name}: {actives_pct:.0%} vs {background_pct:.0%} ({ratio})")
+        print(
+            "\n  CAUTION: a feature can be enriched among potent compounds without\n"
+            "  being what binds. Late-stage optimisation adds fluorine, so aromatic\n"
+            "  halogens correlate with potency inside an optimised series while\n"
+            "  forming no specific interaction. This profile measures correlation\n"
+            "  with potency, not binding mechanism, and cannot tell the two apart."
+        )
+
     if len(reference_scores) < 10:
         print(
             "Too few reference actives docked to define a distribution. A docking "
@@ -642,6 +675,26 @@ def main() -> int:
                 "box_signature": f"{box.center}|{box.size}",
                 "n_requested": len(ligands),
                 "elapsed_seconds": result.elapsed_seconds,
+                "feature_profile": {
+                    "conserved": list(feature_screen.profile.conserved),
+                    "most_discriminating": list(
+                        feature_screen.profile.most_discriminating
+                    ),
+                    "ubiquitous": list(feature_screen.profile.ubiquitous),
+                    "n_actives": feature_screen.profile.n_actives,
+                    "n_background": feature_screen.profile.n_background,
+                    "prevalence": {
+                        name: round(value, 3)
+                        for name, value in feature_screen.profile.prevalence.items()
+                        if value > 0
+                    },
+                    "background_prevalence": {
+                        name: round(value, 3)
+                        for name, value in
+                        feature_screen.profile.background_prevalence.items()
+                        if value > 0
+                    },
+                },
                 "n_fragments": inputs["n_fragments"],
                 "policy_audit_pass_rate": inputs["policy_audit_pass_rate"],
             },
