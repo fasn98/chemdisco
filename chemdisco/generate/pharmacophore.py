@@ -369,11 +369,30 @@ def profile_actives(
 
     Args:
         smiles_list: Known actives.
-        background_smiles: Compounds that are not known actives -- the weakly
-            active end of the same curated set is ideal, since those are real
-            measured compounds against the same target. Strongly recommended:
-            without it, prevalence alone decides, and a feature present in every
-            active may be present in everything else too.
+        background_smiles: Compounds the actives should stand out against.
+            Choosing these is the whole difficulty, and getting it wrong is
+            invisible in the output.
+
+            The first BACE1 profile used the weakly active end of the same
+            curated set, which seemed conservative -- real measured compounds
+            against the same target, no contamination from untested binders. It
+            gave amidine 1.8x enrichment, aromatic halogen 1.7x, and primary
+            amine 1.8x: three features indistinguishable, so a candidate with an
+            aryl fluoride and no basic nitrogen passed a check built to require
+            the binding motif.
+
+            The reason is that a weak BACE1 binder is still a BACE1-series
+            compound. Half of them carry amidines too, so the comparison measured
+            "potent versus weak within one chemotype" rather than "binds versus
+            does not". A feature present in both groups cannot separate them
+            however important it is.
+
+            The background therefore has to be chemically distinct from the
+            actives, not merely less potent. The same dataset serves both roles
+            with different filters: measured weak binders are the right control
+            for *docking enrichment*, where shared chemistry makes the test
+            harder and therefore honest, and the wrong one for *identifying
+            binding determinants*, where shared chemistry erases the signal.
         threshold: Minimum prevalence among the actives.
         enrichment_ratio: Minimum times more common among the actives than in
             the background.

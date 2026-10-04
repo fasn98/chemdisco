@@ -164,6 +164,34 @@ def build_inputs(args) -> dict | None:
     reference = actives[: args.n_reference]
     seeds = actives[: args.n_seed]
 
+    # The feature-profile background must be chemically DISTINCT from the
+    # actives, not merely less potent. A weak BACE1 binder is still a
+    # BACE1-series compound carrying the same amidine, and profiling against
+    # those gave every feature the same ~1.8x enrichment -- so an aryl fluoride
+    # counted as an anchoring motif and candidates with no basic nitrogen passed.
+    weak = [
+        p for p in points if p.pactivity.require() <= args.background_threshold
+    ]
+    background: list[str] = []
+    if weak:
+        from chemdisco.chem.similarity import max_similarity_to_reference
+
+        similarities, _ = max_similarity_to_reference(
+            [p.smiles for p in weak], [p.smiles for p in reference]
+        )
+        background = [
+            p.smiles
+            for p, similarity in zip(weak, similarities, strict=True)
+            if 0.0 <= similarity < args.background_max_similarity
+        ][:400]
+        print(
+            f"\n  feature-profile background: {len(background)} weak binders "
+            f"below {args.background_max_similarity} Tanimoto to every active, "
+            f"from {len(weak)} weak compounds. Same-series weak binders are "
+            "excluded: they carry the actives' motifs too, which erases the "
+            "signal the profile is meant to find."
+        )
+
     heading("2. Generating candidates")
     print(f"  policy: {BACE1_POLICY.describe()}")
     generation = generate_candidates(
@@ -195,11 +223,7 @@ def build_inputs(args) -> dict | None:
             c.novelty.max_similarity if c.novelty else None for c in candidates
         ],
         "reference_feature_smiles": [p.smiles for p in reference],
-        "background_smiles": [
-            p.smiles
-            for p in points
-            if p.pactivity.require() <= args.background_threshold
-        ][:400],
+        "background_smiles": background,
         "n_fragments": generation.n_fragments,
         "n_generated": generation.n_generated,
         "policy_audit_pass_rate": (
@@ -515,6 +539,16 @@ def main() -> int:
     parser.add_argument("--name", default="BACE1")
     parser.add_argument("--pdb", default="4FRS")
     parser.add_argument("--active-threshold", type=float, default=8.0)
+    parser.add_argument(
+        "--background-max-similarity",
+        type=float,
+        default=0.4,
+        help=(
+            "Maximum Tanimoto to any active for a compound to serve as "
+            "feature-profile background. Same-series weak binders carry the "
+            "actives' motifs and erase the signal"
+        ),
+    )
     parser.add_argument(
         "--background-threshold",
         type=float,
