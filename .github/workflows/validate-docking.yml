@@ -15,7 +15,11 @@ on:
       pdb:
         description: "PDB id to redock"
         required: false
-        default: "1FKN"
+        default: "2QMG"
+      survey:
+        description: "Comma-separated PDB ids to inspect instead of docking"
+        required: false
+        default: ""
       exhaustiveness:
         description: "Vina search effort"
         required: false
@@ -57,10 +61,15 @@ jobs:
         id: redock
         run: |
           mkdir -p runs
-          python scripts/validate_docking.py \
-            --pdb "${{ inputs.pdb || '1FKN' }}" \
-            --exhaustiveness "${{ inputs.exhaustiveness || '16' }}" \
-            --output runs/redock.json 2>&1 | tee runs/redock.log
+          if [ -n "${{ inputs.survey }}" ]; then
+            python scripts/validate_docking.py \
+              --survey "${{ inputs.survey }}" 2>&1 | tee runs/redock.log
+          else
+            python scripts/validate_docking.py \
+              --pdb "${{ inputs.pdb || '2QMG' }}" \
+              --exhaustiveness "${{ inputs.exhaustiveness || '16' }}" \
+              --output runs/redock.json 2>&1 | tee runs/redock.log
+          fi
 
       - name: Report
         if: always()
