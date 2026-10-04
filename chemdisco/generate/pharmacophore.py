@@ -123,6 +123,42 @@ class FeatureProfile:
     def has_background(self) -> bool:
         return self.n_background >= 10
 
+    #: Best enrichment a profile must reach before it can identify an anchoring
+    #: feature at all.
+    #:
+    #: Measured, not chosen. Profiling 30 potent BACE1 inhibitors against 400
+    #: weak ones gave amidine 1.9x, aromatic halogen 1.8x and primary amine 1.9x
+    #: -- three features indistinguishable, so a candidate with an aryl fluoride
+    #: and no basic nitrogen passed a check built to require the binding motif.
+    #: Filtering the background to compounds below 0.4 Tanimoto from every active
+    #: moved amidine prevalence from 50% to 48%: essentially nothing.
+    #:
+    #: The reason is structural and not fixable by filtering. Every compound in a
+    #: target's ChEMBL record was designed and tested against that target, so
+    #: nearly all of them carry its warhead whatever their potency. A target's own
+    #: data contains no "does not bind" population, and ECFP4 similarity does not
+    #: separate chemotypes on a shared small motif: two molecules can both carry
+    #: an amidine and still sit below 0.4 Tanimoto.
+    #:
+    #: A profile below this threshold is reported as unable to discriminate, and
+    #: the check is withheld rather than applied as noise. A filter that cannot
+    #: tell a binding motif from an optimisation artefact should say so, not
+    #: produce arbitrary verdicts.
+    MIN_DISCRIMINATING_ENRICHMENT: ClassVar[float] = 3.0
+
+    @property
+    def can_discriminate(self) -> bool:
+        """Whether this background lets any feature stand out as an anchor."""
+        if not self.has_background or not self.conserved:
+            return False
+        best = 0.0
+        for name in self.conserved:
+            ratio = self.enrichment(name)
+            if ratio is None:
+                continue
+            best = max(best, 1000.0 if ratio == float("inf") else ratio)
+        return best >= self.MIN_DISCRIMINATING_ENRICHMENT
+
     @property
     def most_discriminating(self) -> tuple[str, ...]:
         """The conserved features that separate actives from background best.
@@ -141,6 +177,10 @@ class FeatureProfile:
         """
         if not self.has_background or not self.conserved:
             return self.conserved
+        if not self.can_discriminate:
+            # No feature stands out, so naming a "most discriminating" subset
+            # would invent a hierarchy the data does not support.
+            return ()
         ratios: dict[str, float] = {}
         for name in self.conserved:
             ratio = self.enrichment(name)
@@ -164,7 +204,11 @@ class FeatureProfile:
         from a handful of actives describes those compounds rather than the
         target. Both are reported rather than quietly producing an empty check.
         """
-        return bool(self.conserved) and self.n_actives >= 10
+        if self.n_actives < 10 or not self.conserved:
+            return False
+        # With a background, the profile must actually separate something. Without
+        # one, prevalence alone is all there is and the caveat is printed instead.
+        return self.can_discriminate if self.has_background else True
 
     def enrichment(self, name: str) -> float | None:
         """How much more common ``name`` is among the actives than in background."""
@@ -209,6 +253,19 @@ class FeatureProfile:
                 "decided what counts as conserved. A feature in every active may "
                 "also be in every other molecule -- an aromatic ring is -- and "
                 "this check cannot tell the difference without a comparison set."
+            )
+        if self.has_background and not self.can_discriminate:
+            lines.append(
+                f"  NO FEATURE DISCRIMINATES. The best enrichment over background "
+                f"is below {self.MIN_DISCRIMINATING_ENRICHMENT:.0f}x, so this "
+                "profile cannot tell a binding motif from an optimisation "
+                "artefact, and the conserved-feature check is withheld rather "
+                "than applied as noise.\n"
+                "  Usually this means the background is drawn from the same "
+                "target's own data. Every compound there was designed against "
+                "that target, so nearly all carry its warhead whatever their "
+                "potency -- there is no 'does not bind' population in it. A "
+                "background from unrelated targets is what this check needs."
             )
         if self.ubiquitous:
             lines.append(

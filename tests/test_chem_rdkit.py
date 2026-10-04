@@ -779,3 +779,64 @@ class TestFeatureStrength(unittest.TestCase):
             [TestConservedFeatures.WITH_AMIDINE] * 12
         )
         self.assertEqual(profile.most_discriminating, profile.conserved)
+
+
+@requires_rdkit
+class TestProfileCannotDiscriminate(unittest.TestCase):
+    """A check that cannot work must say so, not produce arbitrary verdicts.
+
+    Measured on the real data. Profiling 30 potent BACE1 inhibitors against 400
+    weak ones gave amidine 1.9x enrichment, aromatic halogen 1.8x and primary
+    amine 1.9x -- three features indistinguishable, so a candidate with an aryl
+    fluoride and no basic nitrogen passed a check built to require the binding
+    motif. Filtering the background to compounds below 0.4 Tanimoto from every
+    active moved amidine prevalence from 50% to 48%: essentially nothing.
+
+    The cause is structural. Every compound in a target's ChEMBL record was
+    designed and tested against that target, so nearly all carry its warhead
+    whatever their potency. A target's own data holds no 'does not bind'
+    population.
+    """
+
+    AMIDINE = "CCC1(c2cccc(-c3ccc(F)c(F)c3)c2)COCC(N)=N1"
+    OTHER_AMIDINE = "CCC1(c2ccc(Cl)cc2)COCC(N)=N1"
+    NO_AMIDINE = "Clc1ccc(-c2ccccc2)cc1"
+
+    def test_a_background_sharing_the_motif_cannot_discriminate(self) -> None:
+        from chemdisco.generate import profile_actives
+
+        # Half the background carries the same amidine -- the BACE1 situation.
+        background = [self.OTHER_AMIDINE] * 10 + [self.NO_AMIDINE] * 10
+        profile = profile_actives([self.AMIDINE] * 12, background_smiles=background)
+        self.assertFalse(profile.can_discriminate)
+        self.assertEqual(profile.most_discriminating, ())
+        self.assertFalse(profile.is_informative)
+
+    def test_that_failure_is_stated_with_its_cause(self) -> None:
+        from chemdisco.generate import profile_actives
+
+        background = [self.OTHER_AMIDINE] * 10 + [self.NO_AMIDINE] * 10
+        text = profile_actives(
+            [self.AMIDINE] * 12, background_smiles=background
+        ).describe()
+        self.assertIn("NO FEATURE DISCRIMINATES", text)
+        self.assertIn("withheld rather than applied as noise", text)
+        self.assertIn("same target's own data", text)
+
+    def test_the_check_is_withheld_rather_than_guessed(self) -> None:
+        from chemdisco.generate import check_candidate, profile_actives
+
+        background = [self.OTHER_AMIDINE] * 10 + [self.NO_AMIDINE] * 10
+        profile = profile_actives([self.AMIDINE] * 12, background_smiles=background)
+        verdict = check_candidate(self.NO_AMIDINE, profile)
+        # No verdict either way: an unusable profile must not condemn or clear.
+        self.assertIsNotNone(verdict.error)
+
+    def test_a_genuinely_distinct_background_does_discriminate(self) -> None:
+        from chemdisco.generate import profile_actives
+
+        background = [self.NO_AMIDINE] * 20
+        profile = profile_actives([self.AMIDINE] * 12, background_smiles=background)
+        self.assertTrue(profile.can_discriminate)
+        self.assertIn("amidine", profile.most_discriminating)
+        self.assertNotIn("NO FEATURE DISCRIMINATES", profile.describe())
