@@ -102,16 +102,24 @@ jobs:
       - name: Run the full suite
         run: pytest -v --cov=chemdisco --cov-report=term-missing
 
-      - name: Assert no test was silently skipped
-        # A skipped chemistry test in the job that installs RDKit means the skip
-        # guard misfired, and the suite would pass while testing nothing.
+      - name: Assert nothing was skipped for want of RDKit
+        # The guard's purpose: RDKit is installed in this job, so no test may
+        # skip because RDKit is missing -- that would mean the suite passes while
+        # testing nothing.
+        #
+        # It checks skip *reasons* rather than the skip count, because some skips
+        # are deliberate and correct here: the docking tests need Vina, which
+        # this job does not install, and the network-dependent checks are gated
+        # behind CHEMDISCO_NETWORK_TESTS. Those run in the docking workflow.
         run: |
-          pytest -q 2>&1 | tee result.txt
-          if grep -qE "[0-9]+ skipped" result.txt; then
-            echo "::error::tests were skipped in the RDKit job; the skip guards are wrong"
-            grep -E "[0-9]+ skipped" result.txt
+          pytest -q -rs 2>&1 | tee result.txt
+          if grep -qi "RDKit is not installed" result.txt; then
+            echo "::error::a test skipped for want of RDKit in the job that installs it"
+            grep -i "RDKit is not installed" result.txt
             exit 1
           fi
+          echo "Skips in this job (all expected to be Vina or network gates):"
+          grep -E "^SKIPPED" result.txt || echo "  none"
 
   lint:
     name: Lint and types

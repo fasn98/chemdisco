@@ -12,6 +12,18 @@ preparation raises; a box centred on a crystallisation additive produces a full
 set of plausible poses for a site that binds nothing.
 """
 
+from .box import (
+    Box,
+    atoms_within,
+    blind_box,
+    box_from_ligand,
+    box_from_points,
+    box_from_residues,
+    centroid,
+    extent,
+    pose_is_correct,
+    rmsd,
+)
 from .engine import (
     VINA_ERROR_KCAL,
     DockingError,
@@ -28,18 +40,6 @@ from .engine import (
     scores_are_distinguishable,
     toolchain_report,
     vina_available,
-)
-from .box import (
-    Box,
-    atoms_within,
-    blind_box,
-    box_from_ligand,
-    box_from_points,
-    box_from_residues,
-    centroid,
-    extent,
-    pose_is_correct,
-    rmsd,
 )
 from .pdb import (
     MAX_PEPTIDE_LIGAND_RESIDUES,

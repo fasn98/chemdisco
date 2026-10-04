@@ -40,6 +40,7 @@ pipeline is meant to run it before trusting any result on a new target.
 
 from __future__ import annotations
 
+import contextlib
 import os
 import shutil
 import subprocess
@@ -332,12 +333,11 @@ def prepare_ligand_pdbqt(smiles: str, *, seed: int = 0xF00D) -> tuple[str | None
         parameters.useRandomCoords = True
         if AllChem.EmbedMolecule(mol, parameters) != 0:
             return None, "3D embedding failed even with random coordinates"
-    try:
+    # Optimisation failure is tolerable: the embedded geometry is already
+    # chemically reasonable, and Vina searches torsions itself, so the starting
+    # conformation only has to be sensible rather than optimal.
+    with contextlib.suppress(Exception):
         AllChem.MMFFOptimizeMolecule(mol, maxIters=500)
-    except Exception:
-        # Optimisation failure is tolerable: the embedded geometry is already
-        # chemically reasonable and Vina will search torsions regardless.
-        pass
 
     if meeko_available():
         try:
