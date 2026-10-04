@@ -152,6 +152,36 @@ class TestScoreReporting(unittest.TestCase):
         self.assertIn("BLIND DOCKING", " ".join(result.score_quantity().notes))
 
 
+class TestRunSettingsAreRecorded(unittest.TestCase):
+    """A score has to carry the settings it was produced under.
+
+    Specifically the thread count. ``cpu=0`` means "Vina, use what you find", so
+    the same ligand, receptor, box, seed and exhaustiveness run with two threads on
+    a GitHub runner and sixteen on a workstation. Whether Vina 1.2.7's output
+    depends on that is not settled -- its documentation implies the seed suffices,
+    user reports disagree -- and ``scripts/probe_cpu_determinism.py`` measures it
+    rather than arguing about it.
+
+    Recording it is what makes the measurement possible later. A result that does
+    not say how many threads it used cannot be compared with one that does, and
+    this project has already lost a day to numbers whose hidden inputs differed.
+    """
+
+    def test_defaults_are_explicit_not_absent(self) -> None:
+        result = DockingResult(smiles="CCO")
+        self.assertEqual(result.exhaustiveness, 0)
+        self.assertEqual(result.cpu, 0)
+        self.assertEqual(result.seed, 0)
+
+    def test_settings_are_carried_on_the_result(self) -> None:
+        result = DockingResult(
+            smiles="CCO", box=SAMPLE_BOX, exhaustiveness=32, seed=42, cpu=8
+        )
+        self.assertEqual(result.exhaustiveness, 32)
+        self.assertEqual(result.seed, 42)
+        self.assertEqual(result.cpu, 8)
+
+
 class TestScoreComparison(unittest.TestCase):
     def test_scores_within_the_method_error_are_not_distinguishable(self) -> None:
         # The check that stops a ranked shortlist implying a precision the

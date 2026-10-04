@@ -383,6 +383,7 @@ def combine(directory: pathlib.Path, output: str) -> int:
     boxes: set[str] = set()
     ligand_signatures: set[str] = set()
     curation_signatures: set[str] = set()
+    settings: set[str] = set()
     seconds = 0.0
     requested = 0
 
@@ -397,6 +398,10 @@ def combine(directory: pathlib.Path, output: str) -> int:
             ligand_signatures.add(payload["ligand_signature"])
         if payload.get("curation_signature"):
             curation_signatures.add(payload["curation_signature"])
+        settings.add(
+            f"exhaustiveness={payload.get('exhaustiveness', '?')},"
+            f"cpu={payload.get('cpu', '?')}"
+        )
         seconds += payload.get("elapsed_seconds", 0.0)
         requested += payload.get("n_requested", 0)
         print(
@@ -410,6 +415,15 @@ def combine(directory: pathlib.Path, output: str) -> int:
         print(
             "\nREFUSING: shards used different receptors or boxes. Vina scores "
             "are only comparable within one setup."
+        )
+        return 1
+
+    if len(settings) > 1:
+        print(
+            "\nREFUSING: shards docked with different settings "
+            f"({', '.join(sorted(settings))}). Vina scores produced at different "
+            "exhaustiveness are not comparable, and a thread count left at 0 is "
+            "whatever each machine happened to have."
         )
         return 1
 
@@ -840,6 +854,18 @@ def main() -> int:
     parser.add_argument("--n-candidates", type=int, default=60)
     parser.add_argument("--max-records", type=int, default=8000)
     parser.add_argument("--exhaustiveness", type=int, default=4)
+    parser.add_argument(
+        "--cpu",
+        type=int,
+        default=0,
+        help=(
+            "Vina thread count. 0 lets Vina use what it finds, which makes the "
+            "run machine dependent -- a 2-core runner and a 16-core workstation "
+            "do not necessarily produce the same score. Pin it for any set of "
+            "numbers meant to be compared; scripts/probe_cpu_determinism.py "
+            "measures whether it matters on a given machine"
+        ),
+    )
     parser.add_argument("--time-budget", type=float, default=2400.0)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--cache", default=".cache")
@@ -935,6 +961,7 @@ def main() -> int:
         progress=progress,
         exhaustiveness=args.exhaustiveness,
         n_poses=3,
+        cpu=args.cpu,
         time_budget_seconds=args.time_budget,
     )
     print("\n" + result.describe())
@@ -985,6 +1012,11 @@ def main() -> int:
                 "receptor_id": args.pdb.upper(),
                 "box_signature": f"{box.center}|{box.size}",
                 "ligand_signature": inputs["ligand_signature"],
+                # Recorded so a pooled or compared score carries the settings it
+                # was produced under, including the thread count, which is
+                # machine dependent when left at 0.
+                "exhaustiveness": args.exhaustiveness,
+                "cpu": args.cpu,
                 "curation_signature": inputs["curation_signature"],
                 "n_requested": len(ligands),
                 "elapsed_seconds": result.elapsed_seconds,

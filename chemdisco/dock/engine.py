@@ -158,6 +158,20 @@ class DockingResult:
         n_heavy_atoms: Ligand size, needed for ligand efficiency.
         error: Why the run failed, if it did.
         warnings: Caveats a reader needs before using the score.
+        exhaustiveness: Search effort used, recorded so a score carries it.
+        seed: Vina's random seed.
+        cpu: Thread count Vina ran with. ``0`` means Vina chose, which is machine
+            dependent: the same ligand, receptor, box, seed and exhaustiveness on a
+            2-core runner and a 16-core workstation ran with different thread
+            counts, and whether Vina 1.2.7's output depends on that is not settled
+            -- the documentation implies the seed is sufficient, user reports
+            disagree.
+
+            So it is recorded rather than assumed either way, and
+            ``scripts/probe_cpu_determinism.py`` measures it directly. The reason
+            for the care: a run whose numbers silently depend on the machine is
+            precisely the failure that made six docking shards generate six
+            different candidate lists while being pooled as one experiment.
     """
 
     smiles: str
@@ -167,6 +181,9 @@ class DockingResult:
     n_heavy_atoms: int = 0
     error: str | None = None
     warnings: list[str] = field(default_factory=list)
+    exhaustiveness: int = 0
+    seed: int = 0
+    cpu: int = 0
 
     @property
     def ok(self) -> bool:
@@ -446,7 +463,14 @@ def dock(
         virtual screen will contain ligands that cannot be prepared, and that is
         ordinary rather than exceptional.
     """
-    result = DockingResult(smiles=smiles, box=box, receptor_id=receptor_id)
+    result = DockingResult(
+        smiles=smiles,
+        box=box,
+        receptor_id=receptor_id,
+        exhaustiveness=exhaustiveness,
+        seed=seed,
+        cpu=cpu,
+    )
 
     if not vina_available():
         result.error = (
