@@ -4,6 +4,10 @@ An auditable computational drug-discovery pipeline: curated public bioactivity
 data, QSAR models whose reported performance means something, and fragment-based
 candidate generation that is honest about its reach.
 
+**Picking this up fresh? Read [HANDOFF.md](HANDOFF.md) first.** It holds what is
+pending, what has not been verified, and the two commands to run before trusting
+anything here on a new machine.
+
 ## Why this exists
 
 This is a rewrite of an earlier Streamlit application. That application had a
