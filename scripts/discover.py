@@ -63,7 +63,6 @@ from chemdisco.dock import (  # noqa: E402
     shard_by_label,
     strip_to_receptor,
     toolchain_report,
-    triage_candidates,
     vina_available,
     write_pdb,
 )

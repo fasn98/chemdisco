@@ -100,7 +100,25 @@ jobs:
           PY
 
       - name: Run the full suite
-        run: pytest -v --cov=chemdisco --cov-report=term-missing
+        id: suite
+        run: |
+          set -o pipefail
+          pytest -v --cov=chemdisco --cov-report=term-missing 2>&1 | tee pytest.log
+
+      - name: Annotate test failures
+        if: failure() && steps.suite.outcome == 'failure'
+        # Raw job logs are not retrievable from every environment, so a failing
+        # test was reported only as "exit code 1". Annotations carry the actual
+        # failure, which is the whole point of running the suite.
+        run: |
+          payload=$(grep -A 25 -E "^(FAILED|ERROR|=+ FAILURES)" pytest.log \
+            | head -n 200 | sed 's/%/%25/g' | sed 's/\r//' \
+            | awk '{printf "%s%%0A", $0}')
+          if [ -z "$payload" ]; then
+            payload=$(tail -n 60 pytest.log | sed 's/%/%25/g' \
+              | awk '{printf "%s%%0A", $0}')
+          fi
+          echo "::error title=Test failures py${{ matrix.python-version }}::${payload}"
 
       - name: Assert nothing was skipped for want of RDKit
         # The guard's purpose: RDKit is installed in this job, so no test may
