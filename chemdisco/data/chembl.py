@@ -30,7 +30,7 @@ import json
 import logging
 import pathlib
 import time
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 from urllib.parse import urlencode
@@ -47,6 +47,21 @@ PAGE_LIMIT = 1000
 #: Seconds between requests. ChEMBL asks for considerate use and does not publish
 #: a hard rate limit; this is deliberately unhurried.
 REQUEST_INTERVAL = 0.34
+
+#: HTTP statuses worth retrying. 5xx are server-side faults and 429 is explicit
+#: rate limiting; both are transient. Everything else in 4xx means the request is
+#: wrong and retrying only repeats the mistake.
+RETRYABLE_STATUS: frozenset[int] = frozenset({429, 500, 502, 503, 504})
+
+#: Attempts after the first before giving up.
+MAX_RETRIES = 4
+
+#: First backoff delay in seconds; doubles each attempt (1, 2, 4, 8).
+BACKOFF_BASE = 1.0
+
+#: Per-request timeout. Generous: ChEMBL activity pages of 1000 records are slow
+#: under load, and a short timeout turns a slow success into a failure.
+REQUEST_TIMEOUT = 90
 
 
 class ChEMBLError(RuntimeError):
@@ -123,11 +138,25 @@ class ChEMBLClient:
             Raises on a miss, which is what makes a test suite deterministic
             instead of quietly skipping data.
         request_interval: Seconds between network requests.
+        max_retries: Attempts after the first before giving up on a transient
+            failure.
+        backoff_base: First retry delay in seconds; doubles each attempt.
+        timeout: Per-request timeout in seconds.
+        sleeper: How the client waits. Injected rather than calling
+            ``time.sleep`` directly so the retry and rate-limit behaviour can be
+            tested without the suite actually sleeping through the backoff --
+            which would make a correct implementation take fifteen seconds to
+            verify and tempt someone into not verifying it.
+        notes: Retries and other events worth reporting alongside the data.
     """
 
     cache: ResponseCache | None = None
     offline: bool = False
     request_interval: float = REQUEST_INTERVAL
+    max_retries: int = MAX_RETRIES
+    backoff_base: float = BACKOFF_BASE
+    timeout: float = REQUEST_TIMEOUT
+    sleeper: Callable[[float], None] = time.sleep
     _last_request: float = 0.0
     _session: Any = None
     notes: list[str] = field(default_factory=list)
@@ -152,6 +181,41 @@ class ChEMBLClient:
             )
         return self._session
 
+    def _request_once(self, url: str) -> tuple[dict[str, Any] | None, str | None, bool]:
+        """One attempt. Returns ``(payload, error, retryable)``."""
+        elapsed = time.monotonic() - self._last_request
+        if elapsed < self.request_interval:
+            self.sleeper(self.request_interval - elapsed)
+
+        session = self._get_session()
+        try:
+            response = session.get(url, timeout=self.timeout)
+        except Exception as error:
+            # Timeouts and connection resets are the common transient failures
+            # against a busy public service, so they are retryable.
+            self._last_request = time.monotonic()
+            return None, f"{type(error).__name__}: {error}", True
+        self._last_request = time.monotonic()
+
+        status = response.status_code
+        if status == 200:
+            try:
+                return response.json(), None, False
+            except Exception:
+                # A 200 carrying HTML is what EBI serves from an error page or a
+                # maintenance window. Retryable: the next attempt often succeeds.
+                snippet = response.text[:200].replace("\n", " ")
+                return None, f"HTTP 200 but the body was not JSON: {snippet}", True
+
+        if status in RETRYABLE_STATUS:
+            retry_after = response.headers.get("Retry-After")
+            hint = f"; Retry-After: {retry_after}" if retry_after else ""
+            return None, f"HTTP {status}{hint}", True
+
+        # 4xx other than 429 means the request itself is wrong. Retrying would
+        # only repeat the mistake more slowly.
+        return None, f"HTTP {status}", False
+
     def _fetch(self, path: str, params: dict[str, Any]) -> dict[str, Any]:
         url = f"{CHEMBL_BASE}/{path}?{urlencode(sorted(params.items()))}"
 
@@ -166,25 +230,37 @@ class ChEMBLClient:
                 "cache with a network run first, or commit the fixture."
             )
 
-        elapsed = time.monotonic() - self._last_request
-        if elapsed < self.request_interval:
-            time.sleep(self.request_interval - elapsed)
+        # Retry with exponential backoff.
+        #
+        # Not defensive padding: a probe of this API recorded HTTP 500 on
+        # /status.json and a 60-second read timeout on a molecule lookup within
+        # the same minute that every other endpoint answered normally. Without
+        # retries a single such blip aborts a run that may already have fetched
+        # thousands of records, and the whole dataset is lost to a hiccup in a
+        # free public service that owes nobody an uptime guarantee.
+        last_error = ""
+        for attempt in range(self.max_retries + 1):
+            payload, error, retryable = self._request_once(url)
+            if payload is not None:
+                if self.cache is not None:
+                    self.cache.put(url, payload)
+                return payload
 
-        session = self._get_session()
-        try:
-            response = session.get(url, timeout=60)
-        except Exception as error:
-            raise ChEMBLError(f"request to {url} failed: {error}") from error
-        self._last_request = time.monotonic()
+            last_error = error or "unknown failure"
+            if not retryable or attempt == self.max_retries:
+                break
 
-        if response.status_code != 200:
-            raise ChEMBLError(
-                f"ChEMBL returned HTTP {response.status_code} for {url}"
+            delay = self.backoff_base * (2**attempt)
+            self.notes.append(
+                f"retry {attempt + 1}/{self.max_retries} after {last_error} "
+                f"(waiting {delay:.1f}s): {url}"
             )
-        try:
-            payload = response.json()
-        except Exception as error:
-            raise ChEMBLError(f"ChEMBL returned unparseable JSON for {url}") from error
+            self.sleeper(delay)
+
+        raise ChEMBLError(
+            f"ChEMBL request failed after {self.max_retries + 1} attempt(s): "
+            f"{last_error} for {url}"
+        )
 
         if self.cache is not None:
             self.cache.put(url, payload)

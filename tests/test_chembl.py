@@ -376,3 +376,155 @@ class TestEndToEndCuration(ChEMBLFixtureCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FakeResponse:
+    """Minimal stand-in for a requests Response."""
+
+    def __init__(self, status_code: int, payload=None, text: str = "", headers=None):
+        self.status_code = status_code
+        self._payload = payload
+        self.text = text
+        self.headers = headers or {}
+
+    def json(self):
+        if self._payload is None:
+            raise ValueError("not JSON")
+        return self._payload
+
+
+class FakeSession:
+    """Replays a scripted sequence of responses, recording what was asked."""
+
+    def __init__(self, script):
+        self.script = list(script)
+        self.calls: list[str] = []
+        self.headers: dict[str, str] = {}
+
+    def get(self, url, timeout=None):
+        self.calls.append(url)
+        if not self.script:
+            raise AssertionError(f"unexpected extra request to {url}")
+        item = self.script.pop(0)
+        if isinstance(item, Exception):
+            raise item
+        return item
+
+
+class RetryTestCase(unittest.TestCase):
+    """Retry behaviour, tested without network or real sleeping.
+
+    These exist because a probe of the live API recorded an HTTP 500 and a
+    60-second read timeout within the same minute that every other endpoint
+    answered normally. Without retries one such blip aborts a run that may
+    already have fetched thousands of records.
+    """
+
+    def _client(self, script, **kwargs):
+        self.slept: list[float] = []
+        client = ChEMBLClient(
+            cache=None,
+            offline=False,
+            request_interval=0.0,
+            sleeper=self.slept.append,
+            **kwargs,
+        )
+        client._session = FakeSession(script)
+        return client
+
+    def test_transient_500_is_retried_then_succeeds(self) -> None:
+        client = self._client(
+            [
+                FakeResponse(500, text="<!doctype html>"),
+                FakeResponse(200, payload={"ok": True}),
+            ]
+        )
+        self.assertEqual(client._fetch("status.json", {}), {"ok": True})
+        self.assertEqual(len(client._session.calls), 2)
+
+    def test_timeout_is_retried(self) -> None:
+        client = self._client(
+            [TimeoutError("read timed out"), FakeResponse(200, payload={"ok": True})]
+        )
+        self.assertEqual(client._fetch("status.json", {}), {"ok": True})
+
+    def test_html_body_on_a_200_is_retried(self) -> None:
+        # EBI serves its web framework's HTML from error pages, sometimes with a
+        # 200. Treating that as success would feed garbage into curation.
+        client = self._client(
+            [
+                FakeResponse(200, payload=None, text="<!doctype html><html>"),
+                FakeResponse(200, payload={"ok": True}),
+            ]
+        )
+        self.assertEqual(client._fetch("status.json", {}), {"ok": True})
+
+    def test_backoff_is_exponential(self) -> None:
+        client = self._client(
+            [
+                FakeResponse(503),
+                FakeResponse(503),
+                FakeResponse(503),
+                FakeResponse(200, payload={"ok": True}),
+            ],
+            backoff_base=1.0,
+        )
+        client._fetch("status.json", {})
+        self.assertEqual(self.slept, [1.0, 2.0, 4.0])
+
+    def test_404_is_not_retried(self) -> None:
+        # A 404 means the request is wrong; retrying repeats the mistake slowly.
+        client = self._client([FakeResponse(404)])
+        with self.assertRaises(ChEMBLError) as context:
+            client._fetch("target.json", {"bogus": 1})
+        self.assertIn("HTTP 404", str(context.exception))
+        self.assertEqual(len(client._session.calls), 1)
+        self.assertEqual(self.slept, [])
+
+    def test_429_is_retried(self) -> None:
+        client = self._client(
+            [
+                FakeResponse(429, headers={"Retry-After": "2"}),
+                FakeResponse(200, payload={"ok": True}),
+            ]
+        )
+        self.assertEqual(client._fetch("status.json", {}), {"ok": True})
+
+    def test_persistent_failure_gives_up_and_says_how_many_tries(self) -> None:
+        client = self._client([FakeResponse(500) for _ in range(5)], max_retries=4)
+        with self.assertRaises(ChEMBLError) as context:
+            client._fetch("status.json", {})
+        message = str(context.exception)
+        self.assertIn("after 5 attempt(s)", message)
+        self.assertIn("HTTP 500", message)
+
+    def test_retries_are_recorded_for_the_provenance_report(self) -> None:
+        # A run that succeeded only after three retries is worth knowing about:
+        # it says the source was struggling while the data was collected.
+        client = self._client(
+            [FakeResponse(500), FakeResponse(503), FakeResponse(200, payload={"ok": 1})]
+        )
+        client._fetch("status.json", {})
+        self.assertEqual(len(client.notes), 2)
+        self.assertTrue(all("retry" in note for note in client.notes))
+
+    def test_a_successful_retry_is_cached_once(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            cache = ResponseCache(pathlib.Path(tempdir))
+            client = ChEMBLClient(
+                cache=cache, request_interval=0.0, sleeper=lambda _s: None
+            )
+            client._session = FakeSession(
+                [FakeResponse(500), FakeResponse(200, payload={"ok": True})]
+            )
+            client._fetch("status.json", {})
+            # Second call must be served from cache, making no further request.
+            client._session.script = []
+            self.assertEqual(client._fetch("status.json", {}), {"ok": True})
+
+    def test_offline_mode_never_touches_the_network(self) -> None:
+        client = ChEMBLClient(cache=None, offline=True)
+        client._session = FakeSession([FakeResponse(200, payload={"ok": True})])
+        with self.assertRaises(ChEMBLError):
+            client._fetch("status.json", {})
+        self.assertEqual(client._session.calls, [])
