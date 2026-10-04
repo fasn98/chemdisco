@@ -21,6 +21,7 @@
 #
 #   sudo ./scripts/setup_self_hosted.sh deps
 #   sudo ./scripts/setup_self_hosted.sh runner <owner/repo> <registration-token>
+#   sudo ./scripts/setup_self_hosted.sh limit    # if the box has another job
 #
 # The registration token comes from the repository page:
 #   Settings -> Actions -> Runners -> New self-hosted runner -> Linux
@@ -119,6 +120,49 @@ case "${1:-}" in
     echo
     echo "Then dispatch any workflow as usual. Remove the variable to go back to"
     echo "GitHub's runners; no workflow file changes either way."
+    ;;
+
+  limit)
+    need_root
+    # For a machine that already has a job. A docking run saturates every core for
+    # the better part of an hour, and a box also serving something interactive --
+    # an OpenWebUI instance, a database, anything a person waits on -- will become
+    # unresponsive for that hour. That is a real cost, and it is avoidable.
+    #
+    # Two mechanisms, because they do different things. CPUQuota is a hard ceiling
+    # the kernel enforces: at 75% of eight cores the runner can never take more
+    # than six, so two are always there for the service. Nice is a priority: when
+    # the service does want CPU, it wins. Together the runner gets the machine's
+    # idle capacity and gives it back the moment anything else asks.
+    cores=$(nproc)
+    reserve=${RESERVE_CORES:-2}
+    allowed=$(( cores > reserve ? cores - reserve : 1 ))
+    quota=$(( allowed * 100 ))
+
+    service=$(systemctl list-units --type=service --no-legend \
+      | awk '/actions\.runner/{print $1; exit}')
+    if [ -z "$service" ]; then
+      echo "No runner service found; run '$0 runner ...' first." >&2
+      exit 1
+    fi
+
+    mkdir -p "/etc/systemd/system/${service}.d"
+    cat > "/etc/systemd/system/${service}.d/limits.conf" <<CONF
+[Service]
+# Leave ${reserve} of ${cores} core(s) for whatever else this machine does.
+CPUQuota=${quota}%
+Nice=10
+IOSchedulingClass=idle
+CONF
+    systemctl daemon-reload
+    systemctl restart "$service"
+
+    echo "Runner limited to ${allowed} of ${cores} cores (CPUQuota=${quota}%),"
+    echo "at low CPU and IO priority. Set RESERVE_CORES to change the reservation."
+    echo
+    echo "Pass --cpu ${allowed} to the docking scripts to match. Leaving Vina at 0"
+    echo "makes it start ${cores} threads inside a ${allowed}-core budget: the work"
+    echo "still fits, but the threads fight each other and each run gets slower."
     ;;
 
   status)
