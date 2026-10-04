@@ -34,7 +34,7 @@ on:
 jobs:
   redock:
     if: inputs.mode != 'enrichment'
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
@@ -116,7 +116,7 @@ jobs:
     # interleaved ligand list into the same receptor and box, so the scores pool
     # directly -- and the combine step checks that rather than assuming it.
     if: inputs.mode == 'enrichment'
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
     timeout-minutes: 60
     strategy:
       fail-fast: false
@@ -163,7 +163,7 @@ jobs:
   enrichment-combine:
     if: inputs.mode == 'enrichment'
     needs: enrichment
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

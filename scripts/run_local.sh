@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 # Run the full pipeline on one machine, without GitHub Actions.
 #
+# For a machine that is always on and well connected -- a VPS rather than a
+# laptop -- prefer scripts/setup_self_hosted.sh instead: it keeps every workflow,
+# annotation and run record exactly as they are and simply moves the execution.
+# This script is for driving the pipeline by hand on a machine you are sitting at.
+#
 # Everything the Actions workflows do, minus the sharding -- which existed only to
 # fit a six-hour job limit and a two-core runner, and is pure overhead on a machine
 # with real cores. One process docks the whole list, so there is one ligand
