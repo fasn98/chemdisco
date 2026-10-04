@@ -1,0 +1,64 @@
+name: Live validation
+
+# Separate from CI on purpose. This job talks to ChEMBL over the network, so it
+# can fail for reasons that have nothing to do with a code change -- a slow public
+# API must never put a red mark on a pull request that did not touch retrieval.
+#
+# It runs on demand and weekly. The weekly run is the useful part: it catches
+# ChEMBL release changes that alter the curated dataset, which is exactly the kind
+# of silent drift that makes an old reported metric unreproducible.
+
+on:
+  workflow_dispatch:
+    inputs:
+      accession:
+        description: "UniProt accession to validate against"
+        required: false
+        default: "P56817"
+      name:
+        description: "Human-readable target name"
+        required: false
+        default: "BACE1"
+  schedule:
+    - cron: "17 4 * * 1"
+
+jobs:
+  validate:
+    name: End-to-end validation against live ChEMBL
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[chem,dev]"
+
+      - name: Restore the ChEMBL response cache
+        uses: actions/cache@v4
+        with:
+          path: .cache/chembl
+          key: chembl-${{ inputs.accession || 'P56817' }}-${{ github.run_id }}
+          restore-keys: |
+            chembl-${{ inputs.accession || 'P56817' }}-
+
+      - name: Validate
+        run: |
+          python scripts/validate_target.py \
+            --accession "${{ inputs.accession || 'P56817' }}" \
+            --name "${{ inputs.name || 'BACE1' }}" \
+            --output runs/validation.json
+
+      - name: Upload the summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-summary
+          path: runs/validation.json
+          if-no-files-found: warn

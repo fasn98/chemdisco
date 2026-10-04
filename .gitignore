@@ -1,0 +1,23 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Cached API responses. Regenerate with `chemdisco fetch`; never commit a large
+# cache, but DO commit small fixtures under tests/fixtures/ when a test needs them.
+.cache/
+cache/
+*.json.gz
+!tests/fixtures/**/*.json.gz
+
+# Trained models and run outputs.
+*.joblib
+runs/

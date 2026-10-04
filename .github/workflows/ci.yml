@@ -1,0 +1,138 @@
+name: CI
+
+# Two deliberately separate concerns.
+#
+# `core` runs without RDKit, which proves the claim the architecture rests on:
+# the curation, unit-conversion, splitting and evaluation logic is independent of
+# any chemistry toolkit. If someone moves an RDKit import into one of those
+# modules, this job fails even though the full suite would still pass.
+#
+# `chem` installs RDKit and runs everything, including the structure handling and
+# fragment generation.
+#
+# Live-network validation against ChEMBL is NOT here. It belongs in
+# `validate.yml`, triggered on demand: a public API being slow must not turn into
+# a red mark on a pull request that did not touch data retrieval.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core:
+    name: Core logic (no RDKit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install without the chemistry extra
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: Confirm RDKit really is absent
+        # Otherwise this job silently becomes a duplicate of the `chem` job and
+        # stops testing the separation it exists to test.
+        run: |
+          python - <<'PY'
+          import importlib.util, sys
+          if importlib.util.find_spec("rdkit") is not None:
+              sys.exit("RDKit is installed in the core job; the toolkit-free "
+                       "guarantee is no longer being tested here")
+          print("RDKit absent, as intended")
+          PY
+
+      - name: Run the toolkit-free test modules
+        run: |
+          pytest -v \
+            tests/test_provenance.py \
+            tests/test_units.py \
+            tests/test_curate.py \
+            tests/test_split.py \
+            tests/test_qsar.py \
+            tests/test_chembl.py \
+            tests/test_no_fabrication.py
+
+  chem:
+    name: Full suite (with RDKit)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install with RDKit
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[chem,dev]"
+
+      - name: Report the RDKit version under test
+        run: python -c "import rdkit; print('RDKit', rdkit.__version__)"
+
+      - name: Confirm the SA_Score contrib module is reachable
+        # SAscore lives outside the RDKit package namespace and its availability
+        # varies by install method. Knowing it is absent is better than silently
+        # reporting synthetic accessibility as unavailable for a whole run.
+        continue-on-error: true
+        run: |
+          python - <<'PY'
+          from chemdisco.chem.alerts import synthetic_accessibility
+          q = synthetic_accessibility("CC(=O)Oc1ccccc1C(=O)O")
+          print("SAscore for aspirin:", q.label())
+          PY
+
+      - name: Run the full suite
+        run: pytest -v --cov=chemdisco --cov-report=term-missing
+
+      - name: Assert no test was silently skipped
+        # A skipped chemistry test in the job that installs RDKit means the skip
+        # guard misfired, and the suite would pass while testing nothing.
+        run: |
+          pytest -q 2>&1 | tee result.txt
+          if grep -qE "[0-9]+ skipped" result.txt; then
+            echo "::error::tests were skipped in the RDKit job; the skip guards are wrong"
+            grep -E "[0-9]+ skipped" result.txt
+            exit 1
+          fi
+
+  lint:
+    name: Lint and types
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[chem,dev]"
+
+      - name: Ruff
+        run: ruff check chemdisco tests
+
+      - name: Mypy
+        # Not blocking yet: the codebase is young and RDKit has no stubs.
+        continue-on-error: true
+        run: mypy chemdisco
