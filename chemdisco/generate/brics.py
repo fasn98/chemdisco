@@ -175,7 +175,9 @@ class GenerationReport:
     n_fragments: int = 0
     n_generated: int = 0
     attrition: dict[str, int] = field(default_factory=dict)
-    policy_audit: "PolicyAudit | None" = None
+    # PolicyAudit is defined below; `from __future__ import annotations` makes
+    # the forward reference resolve without quoting it.
+    policy_audit: PolicyAudit | None = None
     notes: list[str] = field(default_factory=list)
 
     def record(self, stage: str) -> None:
