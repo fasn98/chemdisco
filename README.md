@@ -373,11 +373,39 @@ amidine prevalence from 50% to 48%: essentially nothing, because two molecules c
 share a small amidine and still sit below that threshold.
 
 **A target's own data contains no "does not bind" population.** Every compound in
-it was designed and tested against that target. So the check is now *withheld*
-when no feature reaches 3x enrichment, and the report says the survivors have not
-been checked for binding chemistry — a stated gap rather than a silent one. A
-background from unrelated targets is what it needs, which this pipeline does not
-yet fetch.
+it was designed and tested against that target. So the check is *withheld* when no
+feature reaches 3x enrichment, and the report says the survivors have not been
+checked for binding chemistry — a stated gap rather than a silent one.
+
+What it needed was a background from targets with nothing to do with this one.
+`chemdisco/data/background.py` now fetches one: 1200 ligands of ten unrelated
+targets — three kinases, two aminergic GPCRs, a peptide GPCR, two nuclear
+receptors, carbonic anhydrase and COX-2 — balanced round-robin so that truncating
+the set keeps the families even, with anything appearing in the target's own
+dataset excluded by identifier. Measured on BACE1 (`probe-background`, run
+37223022707):
+
+```
+amidine              90% of actives vs  4% of background  (22.5x)  <- conserved
+primary_amine        90% vs 17%                            (5.4x)  <- conserved
+halogen_on_aromatic  93% vs 33%                            (2.8x)  below the floor
+basic_nitrogen_any   97% vs 53%                            (1.8x)
+aromatic_ring       100% vs 98%                            (1.0x)  <- ubiquitous
+```
+
+The gap is the result, not the top number. The aromatic halogen — the feature that
+let the warheadless biaryl through — now falls below the 3x floor, and `amidine` is
+the only motif the check treats as anchoring. A background that enriched everything
+would be as useless as none, so `probe_background.py` checks both sides and reports
+either outcome; it exits 0 on a negative result, because a background that does not
+work is a finding rather than a broken job.
+
+These compounds are **presumed** non-binders, not measured ones: nobody tested them
+against BACE1. Any that do bind dilute the enrichment rather than invent it, so the
+error runs in the safe direction, and the output says "presumed" every time. A
+background below 200 compounds or 3 protein families is refused rather than used —
+an unusable background is worse than none, because it produces ratios that look
+like measurements.
 
 This is the mirror of a trade-off recorded above for enrichment. Measured weak
 binders are the **right** control for docking enrichment, where shared chemistry
@@ -397,11 +425,11 @@ Stated here so it does not have to be inferred:
   chemical space spanned by the input actives. It will not discover a novel
   chemotype, and for a target with few known actives the reachable space is
   correspondingly small.
-- **The conserved-feature check has no usable background.** It needs compounds
-  from unrelated targets; the pipeline only fetches the target's own data, in
-  which everything carries the target's warhead. Until that is addressed, the
-  check is withheld on most targets and shortlists go out unchecked for binding
-  chemistry.
+- **The conserved-feature background is presumed, not measured.** The compounds in
+  it were tested against other targets, never against this one. The presumption
+  dilutes enrichment rather than inflating it, but it is a presumption. And the
+  check still withholds itself on any target where no feature clears 3x — which is
+  the honest outcome, not a solved problem.
 - **Cross-docking is not implemented.** Redocking puts a ligand back into the
   receptor conformation it induced, which is the easiest version of the problem.
   Whether a setup places a *different* ligand correctly is a harder question that
