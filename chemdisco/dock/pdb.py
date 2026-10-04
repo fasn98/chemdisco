@@ -141,6 +141,70 @@ class Residue:
         return self.n_heavy_atoms >= MIN_LIGAND_HEAVY_ATOMS and "C" in self.elements
 
 
+#: Residue count at or below which a polymer chain is treated as a peptide
+#: ligand rather than as the receptor. Thirty is generous: a chain that short is
+#: not a folded domain, and real receptor chains in these structures run to
+#: hundreds of residues.
+MAX_PEPTIDE_LIGAND_RESIDUES = 30
+
+#: The twenty standard amino acids, plus the common modified residues that
+#: appear inside peptide chains without making them non-peptides.
+STANDARD_AMINO_ACIDS: frozenset[str] = frozenset(
+    {
+        "ALA", "ARG", "ASN", "ASP", "CYS", "GLN", "GLU", "GLY", "HIS", "ILE",
+        "LEU", "LYS", "MET", "PHE", "PRO", "SER", "THR", "TRP", "TYR", "VAL",
+        "MSE", "SEC", "PYL", "HSD", "HSE", "HSP", "CSO", "PTR", "SEP", "TPO",
+    }
+)
+
+
+@dataclass(frozen=True, slots=True)
+class Chain:
+    """One polymer chain, with enough information to judge what it is."""
+
+    identifier: str
+    residues: tuple[tuple[str, int], ...]
+    atoms: tuple[Atom, ...]
+
+    @property
+    def n_residues(self) -> int:
+        return len(self.residues)
+
+    @property
+    def residue_names(self) -> set[str]:
+        return {name for name, _ in self.residues}
+
+    @property
+    def is_peptide(self) -> bool:
+        """Whether this chain is made predominantly of amino acids."""
+        if not self.residues:
+            return False
+        standard = sum(
+            1 for name, _ in self.residues if name in STANDARD_AMINO_ACIDS
+        )
+        return standard / self.n_residues >= 0.6
+
+    @property
+    def looks_like_a_peptide_ligand(self) -> bool:
+        """Whether this is a bound peptide rather than part of the receptor.
+
+        The case that matters: a peptidomimetic inhibitor deposited as a polymer
+        chain instead of as HETATM records. 1FKN's OM99-2 is exactly this -- an
+        octapeptide transition-state analogue sitting in chains C and D, with
+        only its non-standard hydroxyethylene isostere written as HETATM.
+
+        Treating such a chain as receptor has two consequences, both silent: the
+        binding site is docked against while still occupied by its own ligand,
+        and any ligand identified from the HETATM records is a 13-atom fragment
+        of a 60-atom molecule.
+        """
+        return self.is_peptide and self.n_residues <= MAX_PEPTIDE_LIGAND_RESIDUES
+
+    @property
+    def heavy_atoms(self) -> tuple[Atom, ...]:
+        return tuple(atom for atom in self.atoms if not atom.is_hydrogen)
+
+
 @dataclass(slots=True)
 class Structure:
     """A parsed PDB structure.
@@ -175,6 +239,51 @@ class Structure:
     def chains(self) -> set[str]:
         return {atom.chain for atom in self.protein_atoms}
 
+    def polymer_chains(self) -> list[Chain]:
+        """Every polymer chain, with the residues needed to classify it."""
+        grouped: dict[str, list[Atom]] = defaultdict(list)
+        for atom in self.atoms:
+            if not atom.is_hetatm:
+                grouped[atom.chain].append(atom)
+        chains: list[Chain] = []
+        for identifier, atoms in grouped.items():
+            seen: list[tuple[str, int]] = []
+            known: set[tuple[str, int]] = set()
+            for atom in atoms:
+                key = (atom.residue_name, atom.residue_seq)
+                if key not in known:
+                    known.add(key)
+                    seen.append(key)
+            chains.append(
+                Chain(identifier=identifier, residues=tuple(seen), atoms=tuple(atoms))
+            )
+        return sorted(chains, key=lambda chain: -chain.n_residues)
+
+    def peptide_ligand_chains(self) -> list[Chain]:
+        """Short peptide chains that are bound ligands, not the receptor.
+
+        A structure's largest chain is the receptor by construction. A chain an
+        order of magnitude shorter, made of amino acids, is a bound peptide --
+        and leaving it in the receptor means docking into an occupied site.
+        """
+        chains = self.polymer_chains()
+        if not chains:
+            return []
+        largest = chains[0].n_residues
+        return [
+            chain
+            for chain in chains[1:]
+            if chain.looks_like_a_peptide_ligand and chain.n_residues < largest / 2
+        ]
+
+    def receptor_chains(self) -> list[Chain]:
+        """Chains that make up the receptor proper."""
+        ligand_ids = {chain.identifier for chain in self.peptide_ligand_chains()}
+        return [
+            chain for chain in self.polymer_chains()
+            if chain.identifier not in ligand_ids
+        ]
+
     def heteroatom_residues(self) -> list[Residue]:
         """Every distinct heteroatom group, solvent and additives included."""
         grouped: dict[tuple[str, str, int], list[Atom]] = defaultdict(list)
@@ -207,9 +316,29 @@ class Structure:
         ``None`` is a real and common answer -- apo structures exist -- and it
         must not be papered over by falling back to the largest heteroatom group
         regardless of what it is.
+
+        See :meth:`ligand_is_peptide_fragment` before using the result as a
+        redocking reference: when a peptidomimetic inhibitor is deposited as a
+        polymer chain, the HETATM records hold only its non-standard residue, and
+        that fragment is not the ligand.
         """
         candidates = self.candidate_ligands()
         return candidates[0] if candidates else None
+
+    def ligand_is_peptide_fragment(self, ligand: Residue) -> Chain | None:
+        """The peptide-ligand chain ``ligand`` belongs to, if it belongs to one.
+
+        Returns the chain when the heteroatom group sits on the same chain
+        identifier as a short peptide ligand -- the signature of a
+        peptidomimetic deposited as a polymer with its non-standard residue
+        split out as HETATM. In that case the HETATM group is a fragment, not
+        the ligand, and anything measured against it is measured against the
+        wrong reference.
+        """
+        for chain in self.peptide_ligand_chains():
+            if chain.identifier == ligand.chain:
+                return chain
+        return None
 
     def describe(self) -> str:
         lines = [
@@ -219,6 +348,20 @@ class Structure:
             f"  {len(self.protein_atoms)} protein atoms over "
             f"{len(self.chains)} chain(s)",
         ]
+        peptide_ligands = self.peptide_ligand_chains()
+        if peptide_ligands:
+            lines.append("  PEPTIDE LIGAND CHAINS (not receptor):")
+            for chain in peptide_ligands:
+                lines.append(
+                    f"    chain {chain.identifier}: {chain.n_residues} residues "
+                    f"({len(chain.heavy_atoms)} heavy atoms)"
+                )
+            lines.append(
+                "    These are bound peptides deposited as polymer chains. They "
+                "must be removed from the receptor, and any HETATM ligand on the "
+                "same chain is a fragment of one of them, not the ligand."
+            )
+
         candidates = self.candidate_ligands()
         if candidates:
             lines.append("  candidate ligands:")
@@ -398,16 +541,31 @@ def write_pdb(atoms: list[Atom], *, title: str = "") -> str:
 
 
 def strip_to_receptor(
-    structure: Structure, *, keep_chains: set[str] | None = None
+    structure: Structure,
+    *,
+    keep_chains: set[str] | None = None,
+    drop_peptide_ligands: bool = True,
 ) -> list[Atom]:
-    """Protein atoms only: solvent, ions, additives and the ligand removed.
+    """Receptor atoms only: solvent, additives and every ligand removed.
 
     Removing the co-crystallised ligand is not optional. Docking into a site that
-    still contains its original occupant scores the new molecule against a
-    pocket that has no room for it, and the result looks like a weak binder
-    rather than a broken setup.
+    still contains its original occupant scores the new molecule against a pocket
+    with no room for it, and the result looks like a weak binder rather than a
+    broken setup.
+
+    ``drop_peptide_ligands`` handles the case that is easy to miss: a
+    peptidomimetic inhibitor deposited as a polymer chain is made of ATOM
+    records, so a filter that removes only HETATM leaves it sitting in the
+    binding site. 1FKN is exactly this -- its OM99-2 inhibitor occupies chains C
+    and D -- and a redocking run against that receptor docks into an occupied
+    pocket while measuring RMSD against a 13-atom fragment of a 60-atom molecule.
     """
     atoms = structure.protein_atoms
+    if drop_peptide_ligands:
+        ligand_chains = {
+            chain.identifier for chain in structure.peptide_ligand_chains()
+        }
+        atoms = [atom for atom in atoms if atom.chain not in ligand_chains]
     if keep_chains:
         atoms = [atom for atom in atoms if atom.chain in keep_chains]
     return atoms

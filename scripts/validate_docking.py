@@ -98,6 +98,76 @@ def fetch_pdb(pdb_id: str, cache_dir: pathlib.Path) -> str | None:
     return None
 
 
+def survey(pdb_ids: list[str], cache_dir: pathlib.Path) -> int:
+    """Report each structure's ligand situation without docking anything.
+
+    Picking a redocking target by guessing which PDB entry has a clean
+    small-molecule inhibitor wastes a fifteen-minute docking run per wrong
+    guess. This inspects candidates in seconds and says which are usable.
+    """
+    heading("Surveying candidate structures")
+    usable: list[str] = []
+
+    for raw in pdb_ids:
+        pdb_id = raw.strip().upper()
+        if not pdb_id:
+            continue
+        print(f"\n{pdb_id}")
+        text = fetch_pdb(pdb_id, cache_dir)
+        if text is None:
+            print("  could not fetch")
+            continue
+
+        structure = parse_pdb(text)
+        resolution = (
+            f"{structure.resolution:.2f} A" if structure.resolution else "n/a"
+        )
+        print(f"  resolution {resolution}; {len(structure.protein_atoms)} protein atoms")
+
+        peptide_chains = structure.peptide_ligand_chains()
+        if peptide_chains:
+            print(
+                "  peptide ligand chain(s): "
+                + ", ".join(
+                    f"{chain.identifier} ({chain.n_residues} residues)"
+                    for chain in peptide_chains
+                )
+            )
+
+        ligand = structure.best_ligand()
+        if ligand is None:
+            print("  NO LIGAND -- apo structure, cannot be redocked")
+            continue
+
+        fragment_of = structure.ligand_is_peptide_fragment(ligand)
+        if fragment_of is not None:
+            print(
+                f"  UNUSABLE: {ligand.name} ({ligand.n_heavy_atoms} atoms) is a "
+                f"fragment of the peptide ligand on chain {fragment_of.identifier}"
+            )
+            continue
+
+        print(
+            f"  USABLE: {ligand.key}, {ligand.n_heavy_atoms} heavy atoms, "
+            f"elements {sorted(ligand.elements)}"
+        )
+        usable.append(f"{pdb_id} ({ligand.name}, {ligand.n_heavy_atoms} atoms)")
+
+    heading("Survey result")
+    if usable:
+        print("Structures suitable for redocking:")
+        for entry in usable:
+            print(f"  {entry}")
+        print(
+            "\nPick one with a ligand of 20-40 heavy atoms: large enough to be a "
+            "real inhibitor, small enough that redocking is not dominated by "
+            "torsional search."
+        )
+    else:
+        print("None of the surveyed structures carries a usable small-molecule ligand.")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--pdb", default="1FKN", help="PDB id to redock")
@@ -107,7 +177,18 @@ def main() -> int:
     parser.add_argument("--padding", type=float, default=8.0)
     parser.add_argument("--cache", default=".cache/pdb")
     parser.add_argument("--output", default="", help="Write a JSON summary here")
+    parser.add_argument(
+        "--survey",
+        default="",
+        help=(
+            "Comma-separated PDB ids to inspect without docking, reporting which "
+            "carry a genuine small-molecule ligand suitable for redocking"
+        ),
+    )
     args = parser.parse_args()
+
+    if args.survey:
+        return survey(args.survey.split(","), pathlib.Path(args.cache))
 
     started = time.monotonic()
     summary: dict[str, object] = {"pdb_id": args.pdb.upper()}
@@ -146,6 +227,29 @@ def main() -> int:
         f"  {ligand.key}: {ligand.n_heavy_atoms} heavy atoms, "
         f"elements {sorted(ligand.elements)}"
     )
+
+    # The check that stops a meaningless verdict. When a peptidomimetic
+    # inhibitor is deposited as a polymer chain, the HETATM records hold only
+    # its non-standard residue -- 13 atoms of a 60-atom molecule in 1FKN -- and
+    # an RMSD measured against that fragment is measured against the wrong
+    # reference. Worse, nearest-neighbour matching against a small reference set
+    # is lenient, so the error flatters the result.
+    peptide_chain = structure.ligand_is_peptide_fragment(ligand)
+    if peptide_chain is not None:
+        print(
+            f"\n  REFUSING: {ligand.name} sits on chain {peptide_chain.identifier}, "
+            f"which is a {peptide_chain.n_residues}-residue peptide ligand "
+            f"({len(peptide_chain.heavy_atoms)} heavy atoms). The HETATM group is "
+            "that peptide's non-standard residue, not the ligand.\n"
+            "  Redocking against it would compare a whole molecule to a fragment "
+            "of itself, and nearest-neighbour RMSD against a small reference set "
+            "flatters the result rather than catching the error.\n"
+            "  Use a structure whose inhibitor is a genuine small molecule, or "
+            "extend this script to reconstruct the full peptide ligand from its "
+            "chain."
+        )
+        summary["refused"] = "ligand is a fragment of a peptide ligand chain"
+        return 1
     for other in structure.candidate_ligands()[1:4]:
         print(f"  (also present: {other.key}, {other.n_heavy_atoms} heavy atoms)")
 

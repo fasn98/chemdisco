@@ -441,3 +441,140 @@ class TestBoxes(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def atom_line(
+    serial: int,
+    name: str,
+    residue: str,
+    chain: str,
+    sequence: int,
+    x: float,
+    y: float,
+    z: float,
+    element: str,
+) -> str:
+    """Build a column-correct ATOM record."""
+    formatted_name = f"{name:<4}" if len(name) >= 4 else f" {name:<3}"
+    return (
+        f"ATOM  {serial:>5} {formatted_name} "
+        f"{residue:>3} {chain:>1}{sequence:>4}    "
+        f"{x:>8.3f}{y:>8.3f}{z:>8.3f}"
+        f"{1.00:>6.2f}{20.00:>6.2f}"
+        f"{'':>10}{element:>2}"
+    )
+
+
+def peptidomimetic_structure() -> str:
+    """A structure shaped like 1FKN: a receptor plus a peptide ligand chain.
+
+    The real case this reproduces. 1FKN is human BACE1 with the transition-state
+    analogue OM99-2 bound. OM99-2 is an octapeptide, so the PDB deposited it as
+    polymer chains C and D -- ATOM records, indistinguishable from receptor by a
+    HETATM filter -- with only its non-standard hydroxyethylene isostere written
+    as the HETATM residue 1OL.
+
+    Two silent failures follow from treating that as a receptor: the binding site
+    is docked against while still occupied by its own ligand, and the ligand
+    identified from HETATM records is a 13-atom fragment of a 60-atom molecule.
+    """
+    residues = ["ALA", "GLY", "SER", "LEU", "VAL", "THR", "PHE", "ASP"]
+    lines: list[str] = []
+    serial = 1
+    # Receptor: chain A, 120 residues.
+    for index in range(120):
+        for atom_name, element in (("N", "N"), ("CA", "C"), ("C", "C"), ("O", "O")):
+            lines.append(
+                atom_line(
+                    serial, atom_name, residues[index % len(residues)], "A",
+                    index + 1, float(index), 0.0, 0.0, element,
+                )
+            )
+            serial += 1
+    # Peptide ligand: chain C, 8 residues, sitting in the site.
+    for index in range(8):
+        for atom_name, element in (("N", "N"), ("CA", "C"), ("C", "C"), ("O", "O")):
+            lines.append(
+                atom_line(
+                    serial, atom_name, residues[index], "C",
+                    index + 1, 50.0 + index, 1.0, 1.0, element,
+                )
+            )
+            serial += 1
+    # Its non-standard residue, split out as HETATM on the same chain.
+    for index in range(13):
+        lines.append(
+            hetatm_line(
+                serial + index, f"C{index}", "1OL", "C", 4,
+                55.0 + index * 0.5, 1.5, 1.5, "C",
+            )
+        )
+    return "\n".join(lines) + "\nEND\n"
+
+
+class TestPeptideLigandChains(unittest.TestCase):
+    """The 1FKN failure: an inhibitor deposited as a polymer chain."""
+
+    def setUp(self) -> None:
+        self.structure = parse_pdb(peptidomimetic_structure())
+
+    def test_the_receptor_chain_is_not_mistaken_for_a_ligand(self) -> None:
+        ligand_chains = self.structure.peptide_ligand_chains()
+        self.assertNotIn("A", {chain.identifier for chain in ligand_chains})
+
+    def test_the_short_peptide_chain_is_identified_as_a_ligand(self) -> None:
+        ligand_chains = self.structure.peptide_ligand_chains()
+        self.assertEqual([chain.identifier for chain in ligand_chains], ["C"])
+        self.assertEqual(ligand_chains[0].n_residues, 8)
+
+    def test_the_peptide_ligand_is_removed_from_the_receptor(self) -> None:
+        # Leaving it in docks into a pocket still occupied by its own ligand.
+        receptor = strip_to_receptor(self.structure)
+        self.assertEqual({atom.chain for atom in receptor}, {"A"})
+        self.assertEqual(len(receptor), 120 * 4)
+
+    def test_keeping_it_can_be_requested_explicitly(self) -> None:
+        receptor = strip_to_receptor(self.structure, drop_peptide_ligands=False)
+        self.assertEqual({atom.chain for atom in receptor}, {"A", "C"})
+
+    def test_the_hetatm_group_is_flagged_as_a_peptide_fragment(self) -> None:
+        # The check that stops a redocking run measuring RMSD against 13 atoms
+        # of a 60-atom molecule.
+        ligand = self.structure.best_ligand()
+        self.assertIsNotNone(ligand)
+        assert ligand is not None
+        self.assertEqual(ligand.name, "1OL")
+        chain = self.structure.ligand_is_peptide_fragment(ligand)
+        self.assertIsNotNone(chain, "1OL sits on the peptide ligand's chain")
+        assert chain is not None
+        self.assertEqual(chain.identifier, "C")
+
+    def test_an_ordinary_small_molecule_is_not_flagged(self) -> None:
+        structure = parse_pdb(SAMPLE_PDB)
+        ligand = structure.best_ligand()
+        assert ligand is not None
+        self.assertIsNone(structure.ligand_is_peptide_fragment(ligand))
+
+    def test_the_description_warns_about_peptide_chains(self) -> None:
+        text = self.structure.describe()
+        self.assertIn("PEPTIDE LIGAND CHAINS", text)
+        self.assertIn("fragment", text)
+
+    def test_chain_classification(self) -> None:
+        chains = {chain.identifier: chain for chain in self.structure.polymer_chains()}
+        self.assertTrue(chains["A"].is_peptide)
+        self.assertFalse(chains["A"].looks_like_a_peptide_ligand)
+        self.assertTrue(chains["C"].looks_like_a_peptide_ligand)
+
+    def test_a_non_peptide_polymer_is_not_treated_as_a_peptide_ligand(self) -> None:
+        # Nucleic acid chains are short and polymeric but are not peptides.
+        lines = [
+            atom_line(i + 1, "P", "DA", "B", i + 1, float(i), 0.0, 0.0, "P")
+            for i in range(10)
+        ]
+        lines += [
+            atom_line(100 + i, "CA", "ALA", "A", i + 1, float(i), 5.0, 0.0, "C")
+            for i in range(200)
+        ]
+        structure = parse_pdb("\n".join(lines) + "\n")
+        self.assertEqual(structure.peptide_ligand_chains(), [])

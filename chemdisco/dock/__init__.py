@@ -42,9 +42,11 @@ from .box import (
     rmsd,
 )
 from .pdb import (
+    MAX_PEPTIDE_LIGAND_RESIDUES,
     MIN_LIGAND_HEAVY_ATOMS,
     NON_LIGAND_RESIDUES,
     Atom,
+    Chain,
     Residue,
     Structure,
     parse_pdb,
@@ -53,6 +55,7 @@ from .pdb import (
 )
 
 __all__ = [
+    "MAX_PEPTIDE_LIGAND_RESIDUES",
     "MIN_LIGAND_HEAVY_ATOMS",
     "VINA_ERROR_KCAL",
     "DockingError",
@@ -72,6 +75,7 @@ __all__ = [
     "NON_LIGAND_RESIDUES",
     "Atom",
     "Box",
+    "Chain",
     "Residue",
     "Structure",
     "atoms_within",
