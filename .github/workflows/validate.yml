@@ -49,16 +49,50 @@ jobs:
             chembl-${{ inputs.accession || 'P56817' }}-
 
       - name: Validate
+        id: validate
+        # Output is captured rather than only streamed, because raw Actions job
+        # logs are not always retrievable (artifact and log endpoints can be
+        # blocked by network policy). The capture is replayed below into the job
+        # summary and, on failure, into annotations, both of which are readable
+        # through the REST API.
         run: |
+          set -o pipefail
           python scripts/validate_target.py \
             --accession "${{ inputs.accession || 'P56817' }}" \
             --name "${{ inputs.name || 'BACE1' }}" \
-            --output runs/validation.json
+            --output runs/validation.json 2>&1 | tee runs/validate.log
+
+      - name: Report the validation output
+        if: always()
+        run: |
+          mkdir -p runs
+          {
+            echo '## Validation output'
+            echo '```'
+            tail -c 60000 runs/validate.log 2>/dev/null || echo '(no output captured)'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Annotate the failure
+        if: failure()
+        # One annotation per line of the tail, so the reason is readable without
+        # the job log. Annotations are capped, hence the modest line count.
+        run: |
+          if [ -f runs/validate.log ]; then
+            tail -n 40 runs/validate.log | while IFS= read -r line; do
+              clean=$(printf '%s' "$line" | tr -d '\r' | sed 's/%/%25/g')
+              [ -n "$clean" ] && echo "::error::${clean}"
+            done
+          else
+            echo "::error::the validation step produced no captured output"
+          fi
 
       - name: Upload the summary
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: validation-summary
-          path: runs/validation.json
+          path: |
+            runs/validation.json
+            runs/validate.log
           if-no-files-found: warn
