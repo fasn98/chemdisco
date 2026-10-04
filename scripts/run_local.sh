@@ -18,6 +18,8 @@
 #   ./scripts/run_local.sh tests      # the full suite
 #   ./scripts/run_local.sh cpu-probe  # does the thread count change a score?
 #   ./scripts/run_local.sh discover   # the pipeline, end to end
+#   ./scripts/run_local.sh control    # same, minus the anchor constraint
+#   ./scripts/run_local.sh compare    # what the constraint did to the LE spread
 #
 # Results land in runs/ and are worth committing: on a local machine the log is
 # the only record, where an Actions run had an immutable one attached to the commit.
@@ -117,6 +119,45 @@ case "${1:-}" in
       --output runs/shortlist.json 2>&1 | tee runs/shortlist.log
     echo
     echo "Shortlist in runs/shortlist.json, log in runs/shortlist.log."
+    ;;
+
+  control)
+    # The control arm for HANDOFF item 2: the same pipeline with the measured
+    # anchoring motif NOT constraining the fragment pool, which reproduces the
+    # double-warhead candidate population the triage threshold was calibrated
+    # against. Run it after `discover`, never alongside: two Vina processes at
+    # cpu=$CPU on this many cores contend, and the point is to hold everything
+    # except the fragment pool fixed.
+    #
+    # Separate directory, deliberately. The combine step globs
+    # discover_shard_*.json over whatever directory it is given, so a control
+    # shard sitting in runs/ would be swept into the main combine. The signature
+    # guard would refuse to pool them -- correctly -- but a confusing refusal is
+    # not the same thing as a clean experiment.
+    activate
+    mkdir -p runs/control
+    python scripts/discover.py \
+      --exhaustiveness "$EXHAUSTIVENESS" \
+      --cpu "$CPU" \
+      --no-anchor-constraint \
+      --shard 0 --n-shards 1 \
+      --time-budget 86400 \
+      --output runs/control/discover_shard_0.json 2>&1 \
+      | tee runs/control/discover.log
+    python scripts/discover.py --combine runs/control \
+      --output runs/control/shortlist.json 2>&1 \
+      | tee runs/control/shortlist.log
+    echo
+    echo "Control arm in runs/control/. Compare the two arms with:"
+    echo "  python scripts/compare_anchor_arms.py \\"
+    echo "    runs/discover_shard_0.json runs/control/discover_shard_0.json"
+    ;;
+
+  compare)
+    activate
+    python scripts/compare_anchor_arms.py \
+      runs/discover_shard_0.json runs/control/discover_shard_0.json 2>&1 \
+      | tee runs/compare_anchor_arms.log
     ;;
 
   *)

@@ -280,7 +280,28 @@ def build_inputs(args) -> dict | None:
             "conserved-feature check is withheld for the same reason."
         )
 
-    policy = replace(BACE1_POLICY, anchor_smarts=anchor_smarts)
+    # The control switch, and it changes exactly one thing: whether the measured
+    # motif constrains the fragment pool. The profile above is still measured, still
+    # recorded, still handed to the feature screen, and still decides whether the
+    # conserved-feature check is usable downstream -- all untouched. Anything wider
+    # than this makes the control worthless, which is why `--background-source none`
+    # is not the way to get it: that would disable the profile as well and move two
+    # variables at once.
+    #
+    # Why the switch exists: the triage threshold was calibrated while watching a
+    # double-warhead candidate pool that the constrained generator no longer emits.
+    # Reproducing that pool on this machine, at this exhaustiveness, is the only way
+    # to measure how far the distribution moved rather than argue that it must have.
+    constraint_applied = bool(anchor_smarts) and not args.no_anchor_constraint
+    if anchor_smarts and not constraint_applied:
+        print(
+            "  CONTROL RUN: the motif above was measured and is recorded, but it is "
+            "NOT constraining the fragment pool. Products may carry it twice, which "
+            "is the population the inherited threshold was calibrated against."
+        )
+    policy = replace(
+        BACE1_POLICY, anchor_smarts=anchor_smarts if constraint_applied else ()
+    )
     print(f"  policy: {policy.describe()}")
     generation = generate_candidates(
         [p.smiles for p in seeds],
@@ -334,7 +355,13 @@ def build_inputs(args) -> dict | None:
         "background_smiles": background,
         "background_summary": background_summary,
         "n_fragments": generation.n_fragments,
+        # Driven by the MEASUREMENT, not by the flag, so a constrained run and its
+        # control carry identical motif provenance and compare field by field.
         "anchor_motifs": list(profile.most_discriminating) if anchor_smarts else [],
+        # The one field that distinguishes them. Without it two shards with the same
+        # `anchor_motifs` would be indistinguishable, and the control would be
+        # unidentifiable from its own record.
+        "anchor_constraint_applied": constraint_applied,
         "n_anchor_fragments": generation.n_anchor_fragments,
         "n_plain_fragments": generation.n_plain_fragments,
         "n_anchor_escapes": generation.n_anchor_escapes,
@@ -460,7 +487,31 @@ def combine(directory: pathlib.Path, output: str) -> int:
     )
 
     first = json.loads(shards[0].read_text())
-    if first.get("anchor_motifs"):
+    # Absent in shards written before the control flag existed, and there a
+    # measured motif did imply an applied constraint -- so that is the default
+    # rather than a guess, and an older shard still reads correctly.
+    constraint_applied = first.get(
+        "anchor_constraint_applied", bool(first.get("anchor_motifs"))
+    )
+    if first.get("anchor_motifs") and not constraint_applied:
+        heading("How generation was constrained: IT WAS NOT (control run)")
+        print(
+            "  anchoring motif(s), measured from the actives and recorded so this "
+            "run compares field by field with the constrained one: "
+            + ", ".join(first["anchor_motifs"])
+        )
+        print(
+            "  The motif did NOT constrain the fragment pool. Products could carry "
+            "it more than once, which reproduces the candidate population the "
+            "triage threshold was calibrated against. Read the attrition below as "
+            "the control arm, not as a pipeline result: a shortlist from this run "
+            "would be assembled from recombination artefacts by construction."
+        )
+        print(
+            f"  fragment pool: all {first.get('n_fragments', 0)} fragments offered "
+            "as reagents, none reserved as seeds."
+        )
+    elif first.get("anchor_motifs"):
         heading("How generation was constrained")
         print(
             "  anchoring motif(s), measured from the actives: "
@@ -866,6 +917,20 @@ def main() -> int:
             "measures whether it matters on a given machine"
         ),
     )
+    parser.add_argument(
+        "--no-anchor-constraint",
+        action="store_true",
+        help=(
+            "Measure the anchoring motif as usual but do NOT use it to constrain "
+            "the fragment pool, so products may carry it more than once. This "
+            "reproduces the candidate population the triage threshold was "
+            "calibrated against, which is the control for asking how far the "
+            "constrained generator moved the ligand-efficiency distribution. It "
+            "changes the fragment pool and nothing else: the feature profile is "
+            "still measured and recorded, the feature screen still runs, and the "
+            "conserved-feature check follows the same path either way"
+        ),
+    )
     parser.add_argument("--time-budget", type=float, default=2400.0)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--cache", default=".cache")
@@ -1049,6 +1114,7 @@ def main() -> int:
                 },
                 "n_fragments": inputs["n_fragments"],
                 "anchor_motifs": inputs["anchor_motifs"],
+                "anchor_constraint_applied": inputs["anchor_constraint_applied"],
                 "n_anchor_fragments": inputs["n_anchor_fragments"],
                 "n_plain_fragments": inputs["n_plain_fragments"],
                 "n_anchor_escapes": inputs["n_anchor_escapes"],
