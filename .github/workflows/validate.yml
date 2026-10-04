@@ -57,6 +57,10 @@ jobs:
         # through the REST API.
         run: |
           set -o pipefail
+          # tee cannot create the directory, and the script only creates it when
+          # it reaches the --output write at the end -- so without this the
+          # capture silently produced nothing on a failing run.
+          mkdir -p runs
           python scripts/validate_target.py \
             --accession "${{ inputs.accession || 'P56817' }}" \
             --name "${{ inputs.name || 'BACE1' }}" \
