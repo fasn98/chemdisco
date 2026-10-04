@@ -139,6 +139,10 @@ jobs:
           python -m pip install vina scipy gemmi meeko
       - name: Dock this shard
         run: |
+          # Without pipefail, tee's exit code masks a crashing script and the
+          # shard reports success while having produced nothing. That is exactly
+          # what happened on the first sharded run.
+          set -o pipefail
           mkdir -p runs
           python scripts/validate_enrichment.py \
             --pdb "${{ inputs.pdb || '4FRS' }}" \
@@ -178,6 +182,7 @@ jobs:
       - name: Combine and analyse
         id: combine
         run: |
+          set -o pipefail
           mkdir -p runs
           python scripts/validate_enrichment.py \
             --combine shards \

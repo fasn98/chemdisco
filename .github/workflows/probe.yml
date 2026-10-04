@@ -35,6 +35,7 @@ jobs:
 
       - name: Probe
         run: |
+          set -o pipefail
           mkdir -p runs
           python scripts/probe_chembl.py \
             --accession "${{ inputs.accession || 'P56817' }}" \

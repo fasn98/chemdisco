@@ -49,6 +49,7 @@ jobs:
 
       - name: Probe
         run: |
+          set -o pipefail
           mkdir -p runs
           python scripts/probe_docking.py 2>&1 | tee runs/probe-docking.log
 

@@ -628,3 +628,65 @@ class TestGroupLevelBalancing(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             balance_selection(self._actives(), [])
+
+
+class TestPublicApi(unittest.TestCase):
+    """Every name the scripts import must actually be exported.
+
+    A missing export took down a six-shard CI run: the scripts imported
+    balance_selection from chemdisco.dock, which did not re-export it, and the
+    whole matrix failed on the import line. Cheap to assert, and it catches the
+    class of error that only shows up in a job that takes an hour to schedule.
+    """
+
+    EXPECTED = (
+        "analyse_enrichment",
+        "auc_roc",
+        "balance_selection",
+        "bedroc",
+        "box_from_ligand",
+        "describe_property_gap",
+        "enrichment_factor",
+        "interleave_by_label",
+        "parse_pdb",
+        "prepare_receptor_pdbqt",
+        "property_gap",
+        "screen",
+        "select_decoys",
+        "strip_to_receptor",
+        "toolchain_report",
+        "triage_candidates",
+        "vina_available",
+        "write_pdb",
+    )
+
+    def test_every_expected_name_is_importable(self) -> None:
+        import chemdisco.dock as module
+
+        missing = [name for name in self.EXPECTED if not hasattr(module, name)]
+        self.assertEqual(missing, [], f"not exported from chemdisco.dock: {missing}")
+
+    def test_all_matches_what_is_importable(self) -> None:
+        import chemdisco.dock as module
+
+        broken = [name for name in module.__all__ if not hasattr(module, name)]
+        self.assertEqual(broken, [], f"listed in __all__ but absent: {broken}")
+
+    def test_the_validation_scripts_import_cleanly(self) -> None:
+        # The scripts are the real consumers of this package's public surface,
+        # and they are not otherwise exercised by the suite.
+        import importlib.util
+        import pathlib
+        import sys
+
+        root = pathlib.Path(__file__).resolve().parent.parent
+        if str(root) not in sys.path:
+            sys.path.insert(0, str(root))
+
+        for script in ("validate_enrichment", "validate_docking", "validate_target"):
+            with self.subTest(script=script):
+                path = root / "scripts" / f"{script}.py"
+                spec = importlib.util.spec_from_file_location(script, path)
+                assert spec is not None and spec.loader is not None
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
