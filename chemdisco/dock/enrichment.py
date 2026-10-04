@@ -37,6 +37,7 @@ from __future__ import annotations
 import math
 from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import ClassVar
 
 import numpy as np
 
@@ -187,16 +188,63 @@ class EnrichmentResult:
     max_ef1: float
     property_gap_warning: str = ""
 
+    #: AUC interval width above which a screen cannot settle the question either
+    #: way. An interval spanning 0.3 reaches from "worse than random" to "good",
+    #: and no verdict drawn from it is supported.
+    INCONCLUSIVE_INTERVAL_WIDTH: ClassVar[float] = 0.30
+
     @property
     def separates(self) -> bool:
         """Whether the screen demonstrably beats random selection.
 
         The test is on the interval's lower bound, not the point estimate. An
-        AUC of 0.62 with an interval reaching below 0.5 is not evidence of
-        anything, and on the set sizes these screens produce that is a common
-        outcome.
+        AUC of 0.62 whose interval reaches below 0.5 is not evidence of anything.
         """
         return self.auc.low > 0.5
+
+    @property
+    def is_conclusive(self) -> bool:
+        """Whether this screen can settle the question at all.
+
+        The distinction that matters, and the one the first version of this
+        class got wrong. ``separates`` returning False covers two completely
+        different situations: a screen that measured no signal, and a screen too
+        small to detect one. Reporting the second as the first turns absence of
+        evidence into evidence of absence.
+
+        A BACE1 run docking 8 actives against 8 decoys produced AUC 0.641
+        [0.317, 0.900] -- an interval reaching from well below random to strong.
+        The honest statement is that the run answered nothing.
+        """
+        if self.separates:
+            return True
+        return self.auc.width <= self.INCONCLUSIVE_INTERVAL_WIDTH
+
+    @property
+    def verdict(self) -> str:
+        """``"separates"``, ``"does not separate"``, or ``"inconclusive"``."""
+        if self.separates:
+            return "separates"
+        if self.is_conclusive:
+            return "does not separate"
+        return "inconclusive"
+
+    def compounds_needed(self, *, target_width: float = 0.20) -> int | None:
+        """Roughly how many compounds per group would narrow the interval enough.
+
+        A bootstrap interval on AUC narrows as the square root of the group
+        size, so a run with an interval twice as wide as wanted needs about four
+        times the compounds. Approximate by construction -- it extrapolates from
+        one observed width -- but it is the difference between "run more" and a
+        guess about how many more.
+        """
+        if self.auc.width <= target_width:
+            return None
+        smaller_group = min(self.n_actives, self.n_decoys)
+        if smaller_group == 0:
+            return None
+        factor = (self.auc.width / target_width) ** 2
+        return int(math.ceil(smaller_group * factor))
 
     def describe(self) -> str:
         lines = [
@@ -210,15 +258,32 @@ class EnrichmentResult:
         if self.property_gap_warning:
             lines.append("  " + self.property_gap_warning)
 
-        if not self.separates:
+        if self.verdict == "inconclusive":
+            needed = self.compounds_needed()
             lines.append(
-                f"\n  VERDICT: the AUC interval reaches {self.auc.low:.3f}, at or "
-                "below random. This screen does not demonstrably rank actives "
-                "above property-matched decoys, so docking scores should not be "
-                "used to triage candidates on this target. That is a result, not "
-                "a malfunction -- docking enrichment genuinely fails on many "
-                "targets, and knowing it here is worth more than a ranked list "
-                "whose order is noise."
+                f"\n  VERDICT: INCONCLUSIVE. The AUC interval spans "
+                f"{self.auc.width:.2f} ({self.auc.low:.3f} to {self.auc.high:.3f}), "
+                "reaching from worse than random to good. This screen is too "
+                "small to settle the question either way.\n"
+                "  This is NOT evidence that docking fails here. Absence of "
+                "evidence is not evidence of absence, and reporting it as such "
+                "would be the error this pipeline exists to avoid."
+            )
+            if needed:
+                lines.append(
+                    f"  To narrow the interval to 0.20 would take roughly "
+                    f"{needed} compounds per group, against the "
+                    f"{min(self.n_actives, self.n_decoys)} used here."
+                )
+        elif not self.separates:
+            lines.append(
+                f"\n  VERDICT: the AUC interval is {self.auc.label()}, tight "
+                "enough to conclude and centred at or below random. This screen "
+                "does not rank actives above property-matched decoys, so docking "
+                "scores should not be used to triage candidates on this target. "
+                "That is a result, not a malfunction -- docking enrichment "
+                "genuinely fails on many targets, and knowing it is worth more "
+                "than a ranked list whose order is noise."
             )
         elif self.auc.estimate < 0.7:
             lines.append(

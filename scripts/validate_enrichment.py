@@ -58,6 +58,7 @@ from chemdisco.dock import (  # noqa: E402
     analyse_enrichment,
     interleave_by_label,
     box_from_ligand,
+    balance_selection,
     describe_property_gap,
     parse_pdb,
     prepare_receptor_pdbqt,
@@ -69,6 +70,123 @@ from chemdisco.dock import (  # noqa: E402
     vina_available,
     write_pdb,
 )
+
+
+def combine(directory: pathlib.Path, output: str) -> int:
+    """Analyse the pooled output of several docking shards.
+
+    Each shard docks a slice of the same ligand list into the same receptor and
+    box, so their scores are directly comparable -- which is the condition that
+    makes sharding valid at all. The check below enforces it rather than
+    assuming it.
+    """
+    heading("Combining shard results")
+    shards = sorted(directory.glob("shard_*.json"))
+    if not shards:
+        print(f"No shard files found in {directory}")
+        return 1
+
+    labels: list[int] = []
+    scores: list[float] = []
+    receptors: set[str] = set()
+    boxes: set[str] = set()
+    gap_warnings: set[str] = set()
+    total_requested = 0
+    total_docked = 0
+    seconds = 0.0
+
+    for path in shards:
+        payload = json.loads(path.read_text())
+        labels.extend(payload["labels"])
+        scores.extend(payload["scores"])
+        receptors.add(payload.get("receptor_id", ""))
+        boxes.add(payload.get("box_signature", ""))
+        if payload.get("gap_warning"):
+            gap_warnings.add(payload["gap_warning"])
+        total_requested += payload.get("n_requested", 0)
+        total_docked += len(payload["scores"])
+        seconds += payload.get("elapsed_seconds", 0.0)
+        print(
+            f"  {path.name}: {len(payload['scores'])} docked "
+            f"({sum(payload['labels'])} actives)"
+        )
+
+    if len(receptors) > 1 or len(boxes) > 1:
+        print(
+            f"\nREFUSING: the shards used {len(receptors)} receptor(s) and "
+            f"{len(boxes)} box(es). Vina scores are only comparable within one "
+            "receptor and one box; pooling them would produce a ranking ordered "
+            "mostly by which setup each ligand happened to get."
+        )
+        return 1
+
+    print(
+        f"\nPooled: {total_docked} of {total_requested} ligands, "
+        f"{sum(labels)} actives and {len(labels) - sum(labels)} decoys, "
+        f"{seconds / 60:.0f} CPU-minutes across {len(shards)} shard(s)"
+    )
+
+    if sum(labels) < 5 or len(labels) - sum(labels) < 5:
+        print("Too few in one group to measure enrichment.")
+        return 1
+
+    heading("Did the score separate them?")
+    enrichment = analyse_enrichment(
+        labels, scores, property_gap_warning="; ".join(sorted(gap_warnings))
+    )
+    print(enrichment.describe())
+
+    active_scores = [s for s, label in zip(scores, labels) if label == 1]
+    decoy_scores = [s for s, label in zip(scores, labels) if label == 0]
+    print(
+        f"\n  mean score: actives {np.mean(active_scores):.2f}, "
+        f"decoys {np.mean(decoy_scores):.2f} kcal/mol "
+        f"(difference {np.mean(active_scores) - np.mean(decoy_scores):+.2f})"
+    )
+
+    heading("Verdict")
+    if enrichment.verdict == "separates":
+        print(
+            f"Docking separates actives from matched decoys (AUC "
+            f"{enrichment.auc.label()}). It can filter candidates that clearly "
+            "do not fit the pocket -- against the actives' score distribution, "
+            "not as a ranking."
+        )
+    elif enrichment.verdict == "does not separate":
+        print(
+            f"Docking does not separate actives from matched decoys (AUC "
+            f"{enrichment.auc.label()}). It should not be used to triage "
+            "candidates on this target.\nThis is a finding, not a failure."
+        )
+    else:
+        needed = enrichment.compounds_needed()
+        print(
+            f"INCONCLUSIVE (AUC {enrichment.auc.label()}). This sample cannot "
+            "settle the question in either direction, and saying otherwise "
+            "would turn absence of evidence into evidence of absence."
+        )
+        if needed:
+            print(f"Roughly {needed} compounds per group would be needed.")
+
+    if output:
+        path = pathlib.Path(output)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps(
+                {
+                    "n_actives": enrichment.n_actives,
+                    "n_decoys": enrichment.n_decoys,
+                    "auc": enrichment.auc.estimate,
+                    "auc_interval": [enrichment.auc.low, enrichment.auc.high],
+                    "verdict": enrichment.verdict,
+                    "ef1": enrichment.ef1,
+                    "bedroc": enrichment.bedroc,
+                },
+                indent=2,
+            )
+        )
+        print(f"\nSummary written to {path}")
+    return 0
 
 
 def heading(text: str) -> None:
@@ -126,7 +244,28 @@ def main() -> int:
     parser.add_argument("--max-records", type=int, default=8000)
     parser.add_argument("--cache", default=".cache")
     parser.add_argument("--output", default="")
+    parser.add_argument(
+        "--shard", type=int, default=0, help="This worker's index, 0-based"
+    )
+    parser.add_argument(
+        "--n-shards",
+        type=int,
+        default=1,
+        help=(
+            "Split the docking across this many workers. The power calculation "
+            "from the first run asked for ~68 compounds per group, which is "
+            "hours of docking on one runner and minutes across several"
+        ),
+    )
+    parser.add_argument(
+        "--combine",
+        default="",
+        help="Directory of shard outputs to analyse instead of docking",
+    )
     args = parser.parse_args()
+
+    if args.combine:
+        return combine(pathlib.Path(args.combine), args.output)
 
     started = time.monotonic()
     summary: dict[str, object] = {"target": args.name, "pdb": args.pdb.upper()}
@@ -242,6 +381,15 @@ def main() -> int:
     decoys = [pool[i] for i in selection.decoy_indices]
     decoy_props = [pool_props[i] for i in selection.decoy_indices]
 
+    # Per-pair matching is not enough: the first run had every decoy within
+    # 25 Da of its matched active while the group means differed by 34.7 Da,
+    # because the matcher could not fill every quota and the decoys it did find
+    # skewed small.
+    balanced, balance_note = balance_selection(active_props, decoy_props)
+    print("\n" + balance_note)
+    decoys = [decoys[i] for i in balanced]
+    decoy_props = [decoy_props[i] for i in balanced]
+
     gaps = property_gap(active_props, decoy_props)
     gap_text = describe_property_gap(gaps)
     print("\n" + gap_text)
@@ -288,6 +436,15 @@ def main() -> int:
     # Interleaved so a truncated run stays balanced. In blocks, a run cut short
     # by the time budget would hold every active and no decoys.
     ligands, labels = interleave_by_label(ligands, labels)
+
+    if args.n_shards > 1:
+        # Stride rather than block, so each shard keeps the interleaved balance
+        # and a shard that runs out of budget is still a balanced sample.
+        ligands = ligands[args.shard :: args.n_shards]
+        labels = labels[args.shard :: args.n_shards]
+        print(
+            f"  shard {args.shard + 1} of {args.n_shards}: {len(ligands)} ligands"
+        )
     print(
         f"  {len(ligands)} ligands at exhaustiveness {args.exhaustiveness}, "
         f"interleaved, budget {args.time_budget:.0f}s"
@@ -309,6 +466,34 @@ def main() -> int:
         time_budget_seconds=args.time_budget,
     )
     print("\n" + screen_result.describe())
+
+    if args.n_shards > 1:
+        # A shard writes its scores and stops. Analysing a shard alone would
+        # report an interval from a fraction of the data as though it were the
+        # whole screen.
+        scored_labels, scores = screen_result.scored()
+        path = pathlib.Path(args.output or f"runs/shard_{args.shard}.json")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps(
+                {
+                    "shard": args.shard,
+                    "labels": scored_labels,
+                    "scores": scores,
+                    "receptor_id": args.pdb.upper(),
+                    "box_signature": f"{box.center}|{box.size}",
+                    "gap_warning": gap_warning,
+                    "n_requested": len(ligands),
+                    "elapsed_seconds": screen_result.elapsed_seconds,
+                },
+                indent=2,
+            )
+        )
+        print(
+            f"\nShard written to {path}. Combine with --combine once every "
+            "shard has finished; a single shard cannot support a verdict."
+        )
+        return 0
 
     # -- 6. Enrichment ----------------------------------------------------
     heading("6. Did the score separate them?")

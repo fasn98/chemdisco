@@ -309,3 +309,92 @@ def describe_property_gap(gaps: dict[str, float]) -> str:
             "attributed to size or lipophilicity."
         )
     return "\n".join(lines)
+
+
+def balance_selection(
+    active_properties: Sequence[dict[str, float]],
+    decoy_properties: Sequence[dict[str, float]],
+    *,
+    tolerances: dict[str, float] | None = None,
+    min_keep_fraction: float = 0.6,
+) -> tuple[list[int], str]:
+    """Drop decoys until the *group-level* property gap is within tolerance.
+
+    Per-pair matching is not enough, and the BACE1 run showed why. Every decoy
+    was within 25 Da of the active it was matched to, yet the group means
+    differed by 34.7 Da -- because the matcher could not fill every active's
+    quota, and the ones it did fill skewed small. A gap that size is enough for
+    Vina's size bias to produce enrichment containing no binding information.
+
+    This removes whichever decoy most worsens the group gap, repeatedly, until
+    the gap is within tolerance on every property or too few decoys remain. It
+    is greedy rather than optimal; the aim is removing an obvious confound, not
+    finding the best subset.
+
+    Args:
+        active_properties: Properties of the actives.
+        decoy_properties: Properties of the selected decoys.
+        tolerances: Per-property limit on the group gap.
+        min_keep_fraction: Stop removing once this fraction of decoys remains.
+            A balanced set too small to measure anything is no improvement.
+
+    Returns:
+        ``(kept_indices, explanation)``, indices into ``decoy_properties``.
+    """
+    tolerances = tolerances or DEFAULT_TOLERANCES
+    if not active_properties or not decoy_properties:
+        raise ValueError("both groups must be non-empty")
+
+    kept = list(range(len(decoy_properties)))
+    floor = max(2, int(min_keep_fraction * len(decoy_properties)))
+    removed = 0
+
+    def gaps_for(indices: list[int]) -> dict[str, float]:
+        subset = [decoy_properties[i] for i in indices]
+        return property_gap(active_properties, subset)
+
+    def worst_excess(gaps: dict[str, float]) -> float:
+        """How far the worst property is beyond its tolerance, relative to it."""
+        excess = 0.0
+        for name, gap in gaps.items():
+            tolerance = tolerances.get(name)
+            if tolerance is None or tolerance <= 0:
+                continue
+            excess = max(excess, abs(gap) / tolerance)
+        return excess
+
+    while len(kept) > floor:
+        gaps = gaps_for(kept)
+        if worst_excess(gaps) <= 1.0:
+            break
+        # Remove the decoy whose absence most reduces the worst relative excess.
+        best_index = None
+        best_excess = worst_excess(gaps)
+        for position, _ in enumerate(kept):
+            trial = kept[:position] + kept[position + 1 :]
+            if not trial:
+                continue
+            excess = worst_excess(gaps_for(trial))
+            if excess < best_excess:
+                best_excess = excess
+                best_index = position
+        if best_index is None:
+            break
+        kept.pop(best_index)
+        removed += 1
+
+    final_gaps = gaps_for(kept)
+    within = worst_excess(final_gaps) <= 1.0
+    explanation = (
+        f"Balancing removed {removed} of {len(decoy_properties)} decoys, "
+        f"leaving {len(kept)}. "
+        + (
+            "The group-level property gap is now within tolerance on every "
+            "property."
+            if within
+            else "The group-level gap is still outside tolerance; the decoy pool "
+            "cannot supply a matched set at this size. Any enrichment measured "
+            "here remains confounded by the property difference."
+        )
+    )
+    return kept, explanation

@@ -33,6 +33,7 @@ on:
 
 jobs:
   redock:
+    if: inputs.mode != 'enrichment'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -107,3 +108,89 @@ jobs:
           encode() { sed 's/%/%25/g' | sed 's/\r//' | awk '{printf "%s%%0A", $0}'; }
           echo "::${level} title=Redock 1 of 2::$(head -n "$half" runs/redock.log | encode)"
           echo "::${level} title=Redock 2 of 2::$(tail -n +"$((half + 1))" runs/redock.log | encode)"
+
+  enrichment:
+    # Sharded because the power calculation from the first run asked for about
+    # 68 compounds per group: hours of docking on one runner at roughly 100s per
+    # ligand, minutes across several. Each shard docks a stride of the same
+    # interleaved ligand list into the same receptor and box, so the scores pool
+    # directly -- and the combine step checks that rather than assuming it.
+    if: inputs.mode == 'enrichment'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install OpenBabel
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq openbabel
+      - name: Install the docking toolchain
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[chem,dev]"
+          python -m pip install vina scipy gemmi meeko
+      - name: Dock this shard
+        run: |
+          mkdir -p runs
+          python scripts/validate_enrichment.py \
+            --pdb "${{ inputs.pdb || '4FRS' }}" \
+            --exhaustiveness "${{ inputs.exhaustiveness || '4' }}" \
+            --n-actives 40 \
+            --decoys-per-active 2 \
+            --shard ${{ matrix.shard }} \
+            --n-shards 6 \
+            --time-budget 2700 \
+            --output "runs/shard_${{ matrix.shard }}.json" 2>&1 \
+            | tee "runs/shard_${{ matrix.shard }}.log"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: enrichment-shard-${{ matrix.shard }}
+          path: runs/shard_${{ matrix.shard }}.*
+          if-no-files-found: warn
+
+  enrichment-combine:
+    if: inputs.mode == 'enrichment'
+    needs: enrichment
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[chem,dev]"
+      - uses: actions/download-artifact@v4
+        with:
+          path: shards
+          pattern: enrichment-shard-*
+          merge-multiple: true
+      - name: Combine and analyse
+        id: combine
+        run: |
+          mkdir -p runs
+          python scripts/validate_enrichment.py \
+            --combine shards \
+            --output runs/enrichment.json 2>&1 | tee runs/enrichment.log
+      - name: Annotate
+        if: always()
+        run: |
+          if [ ! -f runs/enrichment.log ]; then
+            echo "::error::the combine step produced no output"
+            exit 0
+          fi
+          level=error
+          [ "${{ steps.combine.outcome }}" = "success" ] && level=notice
+          payload=$(sed 's/%/%25/g' runs/enrichment.log | sed 's/\r//' \
+            | awk '{printf "%s%%0A", $0}')
+          echo "::${level} title=Enrichment::${payload}"

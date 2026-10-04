@@ -267,12 +267,16 @@ class TestEnrichmentReport(unittest.TestCase):
         decoys = rng.normal(loc=-7.0, scale=0.8, size=n_decoys)
         return [1] * n_actives + [0] * n_decoys, list(actives) + list(decoys)
 
-    def test_a_random_screen_is_reported_as_not_separating(self) -> None:
+    def test_a_large_random_screen_concludes_no_separation(self) -> None:
+        # 500 compounds give an interval tight enough to conclude, so this is a
+        # genuine negative rather than an inconclusive one.
         labels, scores = self._random_screen()
         result = analyse_enrichment(labels, scores, n_resamples=400)
         self.assertFalse(result.separates)
+        self.assertTrue(result.is_conclusive)
+        self.assertEqual(result.verdict, "does not separate")
         text = result.describe()
-        self.assertIn("does not demonstrably rank actives", text)
+        self.assertIn("tight enough to conclude", text)
         # The important framing: a negative result is a result.
         self.assertIn("That is a result, not", text)
 
@@ -508,3 +512,119 @@ class TestTimeBudget(unittest.TestCase):
         )
         self.assertAlmostEqual(result.seconds_per_ligand, 20.0)
         self.assertIn("20.0s each", result.describe())
+
+
+class TestInconclusiveVerdict(unittest.TestCase):
+    """The distinction the first version of this module got wrong.
+
+    ``separates`` returning False covers two completely different situations: a
+    screen that measured no signal, and a screen too small to detect one.
+    Reporting the second as the first turns absence of evidence into evidence of
+    absence -- in the code written to prevent exactly that.
+    """
+
+    def _result(self, estimate, low, high, n_actives=8, n_decoys=8):
+        from chemdisco.dock.enrichment import EnrichmentResult
+        from chemdisco.qsar.evaluate import Interval
+
+        return EnrichmentResult(
+            n_actives=n_actives,
+            n_decoys=n_decoys,
+            auc=Interval(estimate, low, high),
+            ef1=2.0,
+            ef5=2.0,
+            bedroc=0.9,
+            max_ef1=2.0,
+        )
+
+    def test_the_real_bace1_run_is_inconclusive_not_negative(self) -> None:
+        # The actual numbers: 8 actives against 8 decoys gave AUC 0.641 spanning
+        # 0.317 to 0.900 -- from well below random to strong.
+        result = self._result(0.641, 0.317, 0.900)
+        self.assertFalse(result.separates)
+        self.assertFalse(result.is_conclusive)
+        self.assertEqual(result.verdict, "inconclusive")
+
+    def test_an_inconclusive_report_refuses_to_claim_failure(self) -> None:
+        text = self._result(0.641, 0.317, 0.900).describe()
+        self.assertIn("INCONCLUSIVE", text)
+        self.assertIn("NOT evidence that docking fails", text)
+        self.assertIn("Absence of evidence is not evidence of absence", text)
+        # It must not also carry the negative verdict's wording.
+        self.assertNotIn("should not be used to triage", text)
+
+    def test_it_says_how_many_compounds_would_be_needed(self) -> None:
+        result = self._result(0.641, 0.317, 0.900)
+        needed = result.compounds_needed(target_width=0.20)
+        self.assertIsNotNone(needed)
+        assert needed is not None
+        self.assertGreater(needed, 8)
+        self.assertIn(str(needed), result.describe())
+
+    def test_a_tight_interval_below_random_is_a_real_negative(self) -> None:
+        result = self._result(0.48, 0.42, 0.54, n_actives=200, n_decoys=200)
+        self.assertFalse(result.separates)
+        self.assertTrue(result.is_conclusive)
+        self.assertEqual(result.verdict, "does not separate")
+
+    def test_a_clear_positive_needs_no_width_check(self) -> None:
+        # A lower bound above random settles it however wide the interval.
+        result = self._result(0.80, 0.55, 0.95)
+        self.assertTrue(result.separates)
+        self.assertTrue(result.is_conclusive)
+        self.assertEqual(result.verdict, "separates")
+
+    def test_no_further_compounds_needed_when_already_precise(self) -> None:
+        result = self._result(0.48, 0.44, 0.52, n_actives=400, n_decoys=400)
+        self.assertIsNone(result.compounds_needed(target_width=0.20))
+
+
+class TestGroupLevelBalancing(unittest.TestCase):
+    """Per-pair matching is not enough, which the BACE1 run demonstrated."""
+
+    def _actives(self, n=10):
+        return [properties(450, 3.0) for _ in range(n)]
+
+    def test_a_group_gap_within_tolerance_is_left_alone(self) -> None:
+        from chemdisco.dock.decoys import balance_selection
+
+        decoys = [properties(440 + i, 3.0) for i in range(10)]
+        kept, note = balance_selection(self._actives(), decoys)
+        self.assertEqual(len(kept), 10)
+        self.assertIn("within tolerance", note)
+
+    def test_a_skewed_decoy_set_is_trimmed(self) -> None:
+        # Every decoy within 25 Da of its matched active, group means 30 Da
+        # apart -- exactly the shape of the real failure.
+        from chemdisco.dock.decoys import balance_selection
+
+        decoys = [properties(mw, 3.0) for mw in (380, 385, 390, 395, 400, 440, 445, 450, 455, 460)]
+        before = property_gap(self._actives(), decoys)["molecular_weight"]
+        kept, note = balance_selection(self._actives(), decoys)
+        after = property_gap(
+            self._actives(), [decoys[i] for i in kept]
+        )["molecular_weight"]
+        self.assertLess(abs(after), abs(before))
+        self.assertLess(len(kept), 10)
+        self.assertIn("within tolerance", note)
+
+    def test_an_unmatchable_pool_says_so_rather_than_emptying_itself(self) -> None:
+        from chemdisco.dock.decoys import balance_selection
+
+        decoys = [properties(300, 3.0) for _ in range(10)]
+        kept, note = balance_selection(self._actives(), decoys)
+        self.assertGreaterEqual(len(kept), 6)
+        self.assertIn("remains confounded", note)
+
+    def test_it_never_drops_below_the_keep_floor(self) -> None:
+        from chemdisco.dock.decoys import balance_selection
+
+        decoys = [properties(250, 3.0) for _ in range(10)]
+        kept, _ = balance_selection(self._actives(), decoys, min_keep_fraction=0.8)
+        self.assertGreaterEqual(len(kept), 8)
+
+    def test_empty_groups_raise(self) -> None:
+        from chemdisco.dock.decoys import balance_selection
+
+        with self.assertRaises(ValueError):
+            balance_selection(self._actives(), [])
