@@ -330,6 +330,100 @@ class TestPredecessorFailureIsCaught(unittest.TestCase):
             )
 
 
+class TestEvaluationReport(unittest.TestCase):
+    """The report is the product; these test what it refuses to claim."""
+
+    def _evaluate(self, n: int = 300, noise: float = 0.5):
+        X, y = synthetic_dataset(n=n, noise=noise)
+        cut = int(n * 0.75)
+        model = QSARModel().fit(X[:cut], y[:cut])
+        predictions = model.predict_raw(X[cut:])
+        baselines = compute_baselines(
+            y[:cut],
+            y[cut:],
+            fit_predict=make_fit_predict("random_forest", X[:cut], X[cut:]),
+            n_permutations=8,
+        )
+        return evaluate(
+            y[cut:],
+            predictions,
+            n_train=cut,
+            split_strategy="synthetic-holdout",
+            baselines=baselines,
+            n_resamples=300,
+        )
+
+    def test_report_leads_with_sample_sizes_and_split(self) -> None:
+        # A metric without these is uninterpretable, so they come first.
+        text = self._evaluate().describe()
+        self.assertIn("train n=", text)
+        self.assertIn("test n=", text)
+        self.assertIn("synthetic-holdout", text)
+
+    def test_every_metric_carries_an_interval(self) -> None:
+        result = self._evaluate()
+        for name, interval in (
+            ("r2", result.r2),
+            ("rmse", result.rmse),
+            ("mae", result.mae),
+        ):
+            with self.subTest(metric=name):
+                self.assertLess(interval.low, interval.high)
+                self.assertIn("[", interval.label())
+
+    def test_a_good_model_on_enough_data_is_defensible(self) -> None:
+        result = self._evaluate(n=400)
+        self.assertTrue(result.is_defensible, result.describe())
+
+    def test_a_small_test_set_is_never_defensible(self) -> None:
+        # Fewer than thirty held-out compounds cannot support a claim, however
+        # good the point estimate looks.
+        result = self._evaluate(n=60)
+        self.assertLess(result.n_test, 30)
+        self.assertFalse(result.is_defensible)
+        self.assertIn("CAUTION", result.describe())
+
+    def test_leakage_warnings_block_defensibility_outright(self) -> None:
+        X, y = synthetic_dataset(n=400)
+        cut = 300
+        model = QSARModel().fit(X[:cut], y[:cut])
+        baselines = compute_baselines(y[:cut], y[cut:])
+        result = evaluate(
+            y[cut:],
+            model.predict_raw(X[cut:]),
+            n_train=cut,
+            split_strategy="synthetic-holdout",
+            baselines=baselines,
+            leakage_warnings=["feature 'x' correlates with the label at r=0.99"],
+            n_resamples=200,
+        )
+        self.assertFalse(result.is_defensible)
+        self.assertIn("LEAKAGE CHECK FAILED", result.describe())
+
+    def test_a_result_without_baselines_is_not_defensible(self) -> None:
+        # An unbenchmarked number cannot be known to mean anything.
+        X, y = synthetic_dataset(n=400)
+        cut = 300
+        model = QSARModel().fit(X[:cut], y[:cut])
+        result = evaluate(
+            y[cut:],
+            model.predict_raw(X[cut:]),
+            n_train=cut,
+            split_strategy="synthetic-holdout",
+            n_resamples=200,
+        )
+        self.assertFalse(result.is_defensible)
+
+    def test_wide_interval_is_called_out(self) -> None:
+        # With heavy noise and a small test set the interval widens, and the
+        # report must warn that model comparisons below that width are unfounded.
+        result = self._evaluate(n=120, noise=2.0)
+        if result.r2.width > 0.3:
+            self.assertIn("unsupported", result.describe())
+        else:
+            self.skipTest("interval happened to be narrow for this seed")
+
+
 class TestApplicabilityDomain(unittest.TestCase):
     def test_training_like_input_is_in_domain(self) -> None:
         rng = np.random.default_rng(0)
