@@ -67,7 +67,11 @@ from chemdisco.dock import (  # noqa: E402
     vina_available,
     write_pdb,
 )
-from chemdisco.generate import GenerationPolicy, generate_candidates  # noqa: E402
+from chemdisco.generate import (  # noqa: E402
+    GenerationPolicy,
+    generate_candidates,
+    screen_candidates,
+)
 
 #: Generation policy for BACE1, adjusted on the audit rather than on taste.
 #:
@@ -84,6 +88,11 @@ BACE1_POLICY = GenerationPolicy(
     reject_pains=True,
     reject_brenk=False,
     require_novelty=True,
+    # Tightened from the 0.85 default. At 0.85 the first shortlist held five
+    # members of one congeneric series -- the same aminothiazine core with four
+    # different N-substituents. That is one candidate with four variations, not
+    # five candidates, and it crowds out the diversity the list exists to supply.
+    diversity_threshold=0.7,
 )
 
 
@@ -157,6 +166,7 @@ def build_inputs(args) -> dict | None:
     seeds = actives[: args.n_seed]
 
     heading("2. Generating candidates")
+    print(f"  policy: {BACE1_POLICY.describe()}")
     generation = generate_candidates(
         [p.smiles for p in seeds],
         policy=BACE1_POLICY,
@@ -185,6 +195,7 @@ def build_inputs(args) -> dict | None:
         "candidate_novelty": [
             c.novelty.max_similarity if c.novelty else None for c in candidates
         ],
+        "reference_feature_smiles": [p.smiles for p in reference],
         "n_fragments": generation.n_fragments,
         "n_generated": generation.n_generated,
         "policy_audit_pass_rate": (
@@ -270,43 +281,91 @@ def combine(directory: pathlib.Path, output: str) -> int:
     )
 
     threshold = float(np.median(reference))
-    survivors = [c for c in candidates if c["score"] is not None and c["score"] <= threshold]
+    passing_score = [
+        c for c in candidates if c["score"] is not None and c["score"] <= threshold
+    ]
     print(
-        f"\n  {len(survivors)} of {len(candidates)} candidates score at or below "
-        f"{threshold:.2f} kcal/mol, the median known active."
-    )
-    print(
-        "  This is a filter, not a ranking. Docking on this target separates "
-        "actives from decoys (AUC 0.731) but does not order them reliably "
-        "(BEDROC 0.36, empty top 1%), so the survivors below are listed by "
-        "synthetic accessibility, not by score."
+        f"\n  {len(passing_score)} of {len(candidates)} candidates score at or "
+        f"below {threshold:.2f} kcal/mol, the median known active."
     )
 
-    survivors.sort(key=lambda c: (c.get("sascore") or 99.0))
+    # Two corrections the first shortlist needed, both following from what this
+    # package already documents about docking.
+    #
+    # Ligand efficiency, because Vina's score grows close to linearly with size:
+    # the first shortlist's best scores (-12.58, -12.12) were simply its largest
+    # molecules. Comparing raw scores across 20- to 50-atom candidates ranks by
+    # weight.
+    #
+    # The conserved-feature check, because fragment recombination can detach the
+    # group that does the binding. The first shortlist's top entry by synthetic
+    # accessibility was a polyfluorinated biaryl nitrile with no basic nitrogen,
+    # scoring -9.19 against an aspartyl protease whose inhibitors all need one.
+    with_features = [
+        c for c in passing_score if c.get("retains_conserved_feature") is not False
+    ]
+    dropped_features = len(passing_score) - len(with_features)
+    if dropped_features:
+        print(
+            f"  {dropped_features} of those retain NONE of the features conserved "
+            "among the known actives, and are set aside: fragment recombination "
+            "can leave a well-shaped molecule with no way to engage the target, "
+            "and a docking score cannot tell the difference."
+        )
+
+    survivors = with_features
+    efficiencies = [
+        c["ligand_efficiency"]
+        for c in survivors
+        if c.get("ligand_efficiency") is not None
+    ]
+    if efficiencies:
+        print(
+            f"\n  ligand efficiency across survivors: "
+            f"{min(efficiencies):.3f} to {max(efficiencies):.3f} kcal/mol/atom"
+        )
+
+    print(
+        "\n  This is a filter, not a ranking. Docking on this target separates "
+        "actives from decoys (AUC 0.731) but does not order them reliably "
+        "(BEDROC 0.36, empty top 1%), so the survivors are listed by ligand "
+        "efficiency -- which at least corrects for the size bias -- and that "
+        "order still carries far less information than it appears to."
+    )
+
+    survivors.sort(key=lambda c: (c.get("ligand_efficiency") or 0.0))
 
     heading("The shortlist")
     if not survivors:
         print(
-            "No candidate fits the pocket as well as a median known inhibitor. "
-            "That is a clean negative: BRICS recombination of this fragment set "
-            "did not reach the binding site's requirements."
+            "Nothing survived. Either no candidate fits the pocket as well as a "
+            "median known inhibitor, or those that do have lost the chemistry "
+            "that binds it. Both are clean negatives about this fragment set."
         )
     else:
         print(
             f"{len(survivors)} structures that are novel, pass the filters "
-            "calibrated for this target, and occupy the site about as well as "
-            "known inhibitors do.\n"
+            "calibrated for this target, retain a feature the known actives "
+            "share, and occupy the site about as well as known inhibitors do.\n"
         )
         for index, candidate in enumerate(survivors[:15], start=1):
-            sascore = candidate.get("sascore")
-            novelty = candidate.get("novelty")
             print(f"{index:>3}. {candidate['smiles']}")
             details = [f"docking {candidate['score']:.2f} kcal/mol"]
+            efficiency = candidate.get("ligand_efficiency")
+            if efficiency is not None:
+                details.append(f"LE {efficiency:.3f}")
+            if candidate.get("heavy_atoms"):
+                details.append(f"{candidate['heavy_atoms']} heavy atoms")
+            sascore = candidate.get("sascore")
             if sascore is not None:
                 details.append(f"SAscore {sascore:.2f}")
+            novelty = candidate.get("novelty")
             if novelty is not None:
-                details.append(f"nearest known Tanimoto {novelty:.2f}")
+                details.append(f"Tanimoto {novelty:.2f}")
             print("     " + " | ".join(details))
+            conserved = candidate.get("conserved_features") or []
+            if conserved:
+                print(f"     retains: {', '.join(conserved)}")
 
     heading("What these are, and what they are not")
     print(
@@ -333,6 +392,8 @@ def combine(directory: pathlib.Path, output: str) -> int:
             json.dumps(
                 {
                     "n_candidates_docked": len(candidates),
+                    "n_passing_score": len(passing_score),
+                    "n_dropped_no_conserved_feature": dropped_features,
                     "n_survivors": len(survivors),
                     "reference_median": threshold,
                     "reference_n": len(reference_scores),
@@ -414,6 +475,22 @@ def main() -> int:
         zip(inputs["candidate_smiles"], inputs["candidate_novelty"], strict=True)
     )
 
+    # Which features the known actives share, measured from them rather than
+    # assumed. BRICS can detach the group that does the binding and leave a
+    # well-shaped molecule a docking score cannot fault.
+    heading("3b. Profiling the conserved features of the known actives")
+    feature_screen = screen_candidates(
+        inputs["candidate_smiles"], inputs["reference_feature_smiles"]
+    )
+    print(feature_screen.describe())
+    feature_by_smiles = {
+        verdict.smiles: {
+            "present": list(verdict.present),
+            "retains_any": verdict.retains_any,
+        }
+        for verdict in feature_screen.verdicts
+    }
+
     def progress(done: int, total: int, _result) -> None:
         if done % 10 == 0 or done == total:
             print(f"    {done}/{total}", flush=True)
@@ -439,12 +516,21 @@ def main() -> int:
         if label == 1:
             reference_scores.append(docked.best_score)
         else:
+            features = feature_by_smiles.get(docked.smiles, {})
             candidate_rows.append(
                 {
                     "smiles": docked.smiles,
                     "score": docked.best_score,
+                    "heavy_atoms": docked.n_heavy_atoms,
+                    "ligand_efficiency": (
+                        docked.ligand_efficiency().value
+                        if docked.ligand_efficiency().is_known
+                        else None
+                    ),
                     "sascore": sascore_by_smiles.get(docked.smiles),
                     "novelty": novelty_by_smiles.get(docked.smiles),
+                    "retains_conserved_feature": features.get("retains_any"),
+                    "conserved_features": features.get("present", []),
                 }
             )
 

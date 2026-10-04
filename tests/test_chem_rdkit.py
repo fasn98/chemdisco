@@ -501,3 +501,108 @@ class TestGeneration(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@requires_rdkit
+class TestConservedFeatures(unittest.TestCase):
+    """The check that catches a well-shaped molecule with no way to bind.
+
+    Built from the real BACE1 failure. This candidate scored -9.19 kcal/mol,
+    better than the median known inhibitor, and carries no basic nitrogen at
+    all -- so it cannot engage the catalytic aspartate dyad that every known
+    BACE1 inhibitor targets. A docking score has no way to notice: scoring
+    functions reward shape complementarity, not chemistry.
+    """
+
+    # Real structures from the generated shortlist.
+    WARHEADLESS = "N#Cc1cc(-c2cc(F)c(F)c(-c3ccc(F)cn3)c2)cc(Cl)c1F"
+    WITH_AMIDINE = "CCC1(c2cccc(-c3ccc(F)c(F)c3)c2)COCC(N)=N1"
+    AMINOTHIAZINE = (
+        "Cc1cc([C@]2(c3cccc([C@@H]4C[C@@](C)(c5cccc(Cl)c5)N=C(N)S4)c3)"
+        "N=C(N)c3c(F)cc(F)cc32)cn(-c2ccc(F)c(Cl)c2)c1=O"
+    )
+
+    def _actives(self) -> list[str]:
+        # An active set sharing a basic/amidine motif, as a BACE1 set does.
+        return [self.WITH_AMIDINE, self.AMINOTHIAZINE] * 6
+
+    def test_features_are_detected(self) -> None:
+        from chemdisco.generate import features_of
+
+        found = features_of(self.WITH_AMIDINE)
+        self.assertIn("amidine", found)
+        self.assertIn("aromatic_ring", found)
+
+    def test_the_warheadless_candidate_has_no_basic_nitrogen(self) -> None:
+        from chemdisco.generate import features_of
+
+        found = features_of(self.WARHEADLESS)
+        self.assertNotIn("amidine", found)
+        self.assertNotIn("guanidine", found)
+        self.assertNotIn("basic_nitrogen_any", found)
+        # It is still a perfectly ordinary aromatic molecule.
+        self.assertIn("aromatic_ring", found)
+
+    def test_profiling_finds_what_the_actives_share(self) -> None:
+        from chemdisco.generate import profile_actives
+
+        profile = profile_actives(self._actives())
+        self.assertTrue(profile.is_informative)
+        self.assertIn("amidine", profile.conserved)
+
+    def test_the_real_false_positive_is_flagged(self) -> None:
+        from chemdisco.generate import check_candidate, profile_actives
+
+        profile = profile_actives(self._actives())
+        verdict = check_candidate(self.WARHEADLESS, profile)
+        self.assertFalse(verdict.retains_any)
+        self.assertIn("amidine", verdict.missing)
+        self.assertIn("cannot engage the target", verdict.describe())
+
+    def test_a_candidate_keeping_the_motif_passes(self) -> None:
+        from chemdisco.generate import check_candidate, profile_actives
+
+        profile = profile_actives(self._actives())
+        verdict = check_candidate(self.AMINOTHIAZINE, profile)
+        self.assertTrue(verdict.retains_any)
+        self.assertIn("amidine", verdict.present)
+
+    def test_the_check_is_data_driven_not_target_specific(self) -> None:
+        # Pointed at carboxylic acids, it conserves that instead. Nothing in the
+        # module knows about BACE1.
+        from chemdisco.generate import check_candidate, profile_actives
+
+        acids = ["CC(=O)O", "CCC(=O)O", "c1ccccc1C(=O)O"] * 4
+        profile = profile_actives(acids)
+        self.assertIn("carboxylic_acid", profile.conserved)
+        self.assertNotIn("amidine", profile.conserved)
+        self.assertFalse(check_candidate("c1ccccc1", profile).retains_any)
+
+    def test_a_diverse_active_set_yields_no_conserved_feature(self) -> None:
+        # Informative in itself: no single motif characterises binding.
+        from chemdisco.generate import profile_actives
+
+        diverse = ["CCO", "c1ccccc1", "CC(=O)O", "CCCCCC", "C1CCNCC1", "c1ccncc1"] * 2
+        profile = profile_actives(diverse)
+        self.assertEqual(profile.conserved, ())
+        self.assertFalse(profile.is_informative)
+        self.assertIn("too chemically diverse", profile.describe())
+
+    def test_too_few_actives_is_refused_rather_than_guessed(self) -> None:
+        from chemdisco.generate import check_candidate, profile_actives
+
+        profile = profile_actives([self.WITH_AMIDINE] * 3)
+        self.assertFalse(profile.is_informative)
+        verdict = check_candidate(self.WARHEADLESS, profile)
+        self.assertIsNotNone(verdict.error)
+
+    def test_the_screen_reports_how_many_were_flagged(self) -> None:
+        from chemdisco.generate import screen_candidates
+
+        result = screen_candidates(
+            [self.WARHEADLESS, self.WITH_AMIDINE, self.AMINOTHIAZINE],
+            self._actives(),
+        )
+        self.assertEqual(result.n_flagged, 1)
+        self.assertEqual(result.n_retaining, 2)
+        self.assertIn("retain none", result.describe())
