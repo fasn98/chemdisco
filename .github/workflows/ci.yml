@@ -130,7 +130,23 @@ jobs:
           python -m pip install -e ".[chem,dev]"
 
       - name: Ruff
-        run: ruff check chemdisco tests
+        # `--output-format github` emits GitHub annotations, which attach to the
+        # check run and are readable through the API. Raw job logs are not
+        # always retrievable (artifact endpoints can be blocked by network
+        # policy), so annotations are the reliable way to see what failed.
+        run: ruff check chemdisco tests scripts --output-format github
+
+      - name: Ruff summary
+        # Runs even on failure so the findings also land in the job summary,
+        # which is where a human will look first.
+        if: always()
+        run: |
+          {
+            echo '## Ruff findings'
+            echo '```'
+            ruff check chemdisco tests scripts --output-format concise || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Mypy
         # Not blocking yet: the codebase is young and RDKit has no stubs.
