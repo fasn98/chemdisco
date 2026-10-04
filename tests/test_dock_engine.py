@@ -256,10 +256,16 @@ class TestRealDocking(unittest.TestCase):
 
     @requires_network
     def test_docking_into_a_prepared_receptor(self) -> None:
-        from chemdisco.dock import dock, parse_pdb, prepare_receptor_pdbqt, strip_to_receptor, write_pdb
-        from chemdisco.dock.box import box_from_ligand
-
         import urllib.request
+
+        from chemdisco.dock import (
+            dock,
+            parse_pdb,
+            prepare_receptor_pdbqt,
+            strip_to_receptor,
+            write_pdb,
+        )
+        from chemdisco.dock.box import box_from_ligand
 
         with urllib.request.urlopen(
             "https://files.rcsb.org/download/1FKN.pdb", timeout=120

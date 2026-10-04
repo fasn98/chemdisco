@@ -56,6 +56,7 @@ from chemdisco.dock import (  # noqa: E402
     write_pdb,
 )
 
+
 def fetch_ligand_smiles(code: str, cache_dir: pathlib.Path) -> tuple[str | None, str]:
     """Look up a ligand's chemistry from the RCSB chemical component dictionary.
 
