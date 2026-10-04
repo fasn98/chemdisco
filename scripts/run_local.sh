@@ -25,6 +25,13 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+# Every long command here pipes through `tee`, which makes Python block-buffer its
+# stdout: a run that takes two hours shows nothing for the first thirty minutes and
+# then emits 4KB at once. On this machine the log IS the record -- an Actions run had
+# an immutable one attached to the commit -- so a record that lags half an hour
+# behind the work is not one. Unbuffered costs nothing at these output volumes.
+export PYTHONUNBUFFERED=1
+
 VENV=${VENV:-.venv}
 CPU=${CPU:-0}
 EXHAUSTIVENESS=${EXHAUSTIVENESS:-8}
