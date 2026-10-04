@@ -310,17 +310,25 @@ shortlist — or, as often, a reasoned empty one. On BACE1 against 4FRS, roughly
 50 CPU-minutes across six shards:
 
 ```
-48 candidates docked alongside 30 reference actives, one receptor, one box
-12 reach the reference median ligand efficiency (-0.260 kcal/mol/atom)
- 0 are recombination artefacts
-12 on the shortlist, 16-41 heavy atoms, SAscore 3.5-5.3,
-   Tanimoto 0.30-0.72 to the nearest known compound
+47 candidates docked alongside 30 reference actives, one receptor, one box
+22 reach the reference median ligand efficiency (-0.260 kcal/mol/atom)
+15 of those retain no discriminating feature and are set aside
+ 4 carry the anchoring motif twice: two inhibitors glued end to end
+ 3 on the shortlist, 18-24 heavy atoms, SAscore 3.6-3.7,
+   Tanimoto 0.35-0.49 to the nearest known compound, all carrying an amidine
 ```
 
-Eleven of the twelve carry a genuine BACE1 warhead — aminooxazine, aminothiazine,
-aminoimidazoline — without any rule requiring one, because the fragments came
-from potent inhibitors and the efficiency threshold favours compact molecules
-where the warhead dominates the atom count.
+That is run 37223489128, the first with the conserved-feature check actually
+applied rather than withheld. It is not a gentle filter: 15 of 22 candidates that
+occupy the site as efficiently as a median known inhibitor carry nothing that
+could engage the catalytic dyad, and a docking score cannot see the difference.
+
+**An earlier run of the same pipeline, same seed, docked 48 candidates and passed
+12 of them.** Vina is seeded and curation sorts its output by compound identifier,
+so neither the docking nor the ranking explains a swing from 25% to 47%. The cause
+is not yet established, and saying so is more useful than a plausible story: each
+shard now records a hash of the ligand list it derived, and the combine step
+refuses to pool shards that disagree. That instrument did not exist for either run.
 
 **The shortlist carries no potency prediction.** Generated candidates sit outside
 the QSAR model's applicability domain almost by construction: the reason to

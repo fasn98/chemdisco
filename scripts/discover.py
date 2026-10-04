@@ -40,6 +40,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import pathlib
 import sys
@@ -145,7 +146,21 @@ def build_inputs(args) -> dict | None:
     )
     print(report.describe())
 
-    points = sorted(report.kept, key=lambda p: -p.pactivity.require())
+    # The explicit tie-break makes the ranking independent of this file. Curation
+    # already sorts its output by (target_id, compound_id) and Python's sort is
+    # stable, so potency alone is in fact reproducible -- but ties are frequent,
+    # reported activities cluster on round numbers, and the top 30 of this list
+    # become the docking reference while the top 50 become the fragment seeds. The
+    # ranking should not depend on a guarantee made two modules away.
+    #
+    # The open question this does *not* answer: two runs of this pipeline on the
+    # same target with the same seed docked 48 and 47 candidates, of which 12 and
+    # 22 cleared the same efficiency threshold. Vina is seeded and curation is
+    # order-independent, so neither explains it. The ligand signature recorded in
+    # each shard is the instrument for localising it -- within a run first.
+    points = sorted(
+        report.kept, key=lambda p: (-p.pactivity.require(), p.compound_id)
+    )
     if len(points) < 100:
         print("Too few curated compounds.")
         return None
@@ -305,6 +320,7 @@ def combine(directory: pathlib.Path, output: str) -> int:
     candidates: list[dict] = []
     receptors: set[str] = set()
     boxes: set[str] = set()
+    ligand_signatures: set[str] = set()
     seconds = 0.0
     requested = 0
 
@@ -315,6 +331,8 @@ def combine(directory: pathlib.Path, output: str) -> int:
         candidates.extend(payload["candidates"])
         receptors.add(payload["receptor_id"])
         boxes.add(payload["box_signature"])
+        if payload.get("ligand_signature"):
+            ligand_signatures.add(payload["ligand_signature"])
         seconds += payload.get("elapsed_seconds", 0.0)
         requested += payload.get("n_requested", 0)
         print(
@@ -326,6 +344,19 @@ def combine(directory: pathlib.Path, output: str) -> int:
         print(
             "\nREFUSING: shards used different receptors or boxes. Vina scores "
             "are only comparable within one setup."
+        )
+        return 1
+
+    if len(ligand_signatures) > 1:
+        print(
+            "\nREFUSING: shards derived different ligand lists "
+            f"({', '.join(sorted(ligand_signatures))}). Sharding is valid only "
+            "when every worker docks a slice of one list; pooling slices of "
+            "different lists is not one experiment, and the shortlist would be "
+            "assembled from incomparable parts. Each shard fetches ChEMBL for "
+            "itself, so the likely causes are a dataset that changed mid-run or a "
+            "retrieval that returned a different number of records -- compare the "
+            "curation counts the shard logs print."
         )
         return 1
 
@@ -839,6 +870,14 @@ def main() -> int:
                 "candidates": candidate_rows,
                 "receptor_id": args.pdb.upper(),
                 "box_signature": f"{box.center}|{box.size}",
+                # What makes sharding valid: every shard must derive the identical
+                # ligand list and dock a slice of it. Each shard fetches ChEMBL
+                # for itself, so that is an assumption until it is checked.
+                "ligand_signature": hashlib.sha256(
+                    "\n".join(
+                        [*inputs["reference_smiles"], *inputs["candidate_smiles"]]
+                    ).encode()
+                ).hexdigest()[:16],
                 "n_requested": len(ligands),
                 "elapsed_seconds": result.elapsed_seconds,
                 "feature_profile": {

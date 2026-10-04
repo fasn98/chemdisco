@@ -344,5 +344,61 @@ class TestFullPipeline(unittest.TestCase):
         self.assertIn("derived", row["pactivity_label"])
 
 
+class TestDeterministicOrdering(unittest.TestCase):
+    """Ranking curated points must not depend on the order they arrived in.
+
+    ``scripts/discover.py`` takes the top 30 curated points as the docking
+    reference and the top 50 as fragment seeds, and each of the six shards fetches
+    ChEMBL independently. If that ranking depended on retrieval order, shards could
+    dock different ligand lists and the combine step would pool them as one
+    experiment.
+
+    It does not, and this pins down why: aggregation sorts ``kept`` by
+    ``(target_id, compound_id)`` before anything downstream sees it, and Python's
+    sort is stable, so a potency sort over that list is reproducible even though
+    reported activities cluster on round numbers and tie constantly. The guarantee
+    lives in aggregation rather than in the script, which is the fragile part --
+    hence this test rather than a comment.
+    """
+
+    def points(self, order: list[str]):
+        records = [
+            record(f"ACT{identifier}", identifier, value=100.0)
+            for identifier in order
+        ]
+        return curate(records).kept
+
+    def test_curation_output_order_is_independent_of_input_order(self) -> None:
+        forward = [p.compound_id for p in self.points(["C1", "C2", "C3"])]
+        backward = [p.compound_id for p in self.points(["C3", "C2", "C1"])]
+        self.assertEqual(forward, backward)
+        self.assertEqual(forward, ["C1", "C2", "C3"])
+
+    def test_tie_breaking_on_identifier_is_stable(self) -> None:
+        def ranked(order: list[str]) -> list[str]:
+            return [
+                p.compound_id
+                for p in sorted(
+                    self.points(order),
+                    key=lambda p: (-p.pactivity.require(), p.compound_id),
+                )
+            ]
+
+        self.assertEqual(ranked(["C1", "C2", "C3"]), ["C1", "C2", "C3"])
+        self.assertEqual(ranked(["C3", "C1", "C2"]), ["C1", "C2", "C3"])
+        self.assertEqual(ranked(["C2", "C3", "C1"]), ["C1", "C2", "C3"])
+
+    def test_potency_still_dominates_the_tie_break(self) -> None:
+        records = [
+            record("A1", "C9", value=1.0),  # most potent, last identifier
+            record("A2", "C1", value=10_000.0),
+        ]
+        kept = sorted(
+            curate(records).kept,
+            key=lambda p: (-p.pactivity.require(), p.compound_id),
+        )
+        self.assertEqual([p.compound_id for p in kept], ["C9", "C1"])
+
+
 if __name__ == "__main__":
     unittest.main()
