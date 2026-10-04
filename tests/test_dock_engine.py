@@ -294,3 +294,53 @@ class TestRealDocking(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestPoseRankingDetermination(unittest.TestCase):
+    """Whether the score actually separates the top pose from the rest.
+
+    Encodes a measured result rather than an assumption. Redocking the 4FRS
+    inhibitor produced the pose set below -- nine poses spanning 1.23 kcal/mol,
+    entirely inside Vina's own 2.5 kcal/mol error, with the crystallographically
+    correct pose ranked third at 1.82 A while a 4.19 A pose ranked first.
+    Quadrupling exhaustiveness from 16 to 64 found more correct poses but still
+    ranked a 4.22 A pose first, which settles it: the limitation is the scoring
+    function, not the search.
+    """
+
+    #: The real 4FRS scores, at exhaustiveness 16.
+    FOUR_FRS_SCORES = (-8.32, -8.21, -8.01, -7.84, -7.28, -7.25, -7.25, -7.24, -7.09)
+
+    def _result(self, scores) -> DockingResult:
+        return DockingResult(
+            smiles="[H]/N=C1\\N[C@](C)(c2sc(-c3cncc(C#CC)c3)cc2Cl)CC(=O)N1C",
+            poses=[Pose(rank=i + 1, score=s) for i, s in enumerate(scores)],
+            receptor_id="4FRS",
+            n_heavy_atoms=25,
+        )
+
+    def test_the_real_4frs_pose_set_is_not_separated(self) -> None:
+        result = self._result(self.FOUR_FRS_SCORES)
+        self.assertAlmostEqual(result.score_spread or 0.0, 1.23, places=2)
+        self.assertFalse(result.pose_ranking_is_determined)
+
+    def test_that_limitation_reaches_the_reported_quantity(self) -> None:
+        notes = " ".join(self._result(self.FOUR_FRS_SCORES).score_quantity().notes)
+        self.assertIn("not determined by the score", notes)
+
+    def test_and_the_human_readable_report(self) -> None:
+        self.assertIn(
+            "not determined by the score",
+            self._result(self.FOUR_FRS_SCORES).describe(),
+        )
+
+    def test_a_genuinely_separated_pose_set_is_recognised(self) -> None:
+        # When one pose really does stand out by more than the method's error,
+        # the ranking means something and must not be dismissed.
+        result = self._result((-12.0, -7.0, -6.5, -6.0))
+        self.assertTrue(result.pose_ranking_is_determined)
+        self.assertNotIn("not determined", result.describe())
+
+    def test_a_single_pose_is_never_determined(self) -> None:
+        # One pose carries no evidence that it beat anything.
+        self.assertFalse(self._result((-9.0,)).pose_ranking_is_determined)

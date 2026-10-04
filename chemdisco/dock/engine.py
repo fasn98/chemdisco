@@ -172,6 +172,26 @@ class DockingResult:
         return self.error is None and bool(self.poses)
 
     @property
+    def pose_ranking_is_determined(self) -> bool:
+        """Whether the score actually separates the top pose from the rest.
+
+        Measured, not assumed. Redocking the 4FRS inhibitor produced nine poses
+        spanning 1.23 kcal/mol -- entirely inside Vina's own 2.5 kcal/mol error --
+        with the crystallographically correct pose ranked third. Quadrupling
+        exhaustiveness from 16 to 64 found more correct poses but still ranked a
+        4.2 A pose first, which settles the question: the limitation is the
+        scoring function, not the search.
+
+        When this is False, the top pose is the top pose by a margin the method
+        cannot resolve, and treating it as the predicted binding mode asserts a
+        precision the calculation does not have.
+        """
+        if len(self.poses) < 2:
+            return False
+        spread = self.score_spread
+        return spread is not None and spread > VINA_ERROR_KCAL
+
+    @property
     def best_score(self) -> float | None:
         return self.poses[0].score if self.poses else None
 
@@ -208,10 +228,12 @@ class DockingResult:
             "the function rewards molecular size, so compare ligand efficiency "
             "rather than raw score across molecules of different sizes",
         ]
-        if self.score_spread is not None and self.score_spread < 0.5:
+        if self.score_spread is not None and self.score_spread < VINA_ERROR_KCAL:
             notes.append(
-                f"poses span only {self.score_spread:.2f} kcal/mol; the search did "
-                "not strongly prefer one arrangement"
+                f"all {len(self.poses)} poses fall within {self.score_spread:.2f} "
+                f"kcal/mol, inside the method's own {VINA_ERROR_KCAL} kcal/mol "
+                "error. The pose ranking is therefore not determined by the "
+                "score: the top pose is not meaningfully better than the others."
             )
         notes.extend(self.warnings)
 
@@ -267,6 +289,11 @@ class DockingResult:
                 else ""
             ),
         ]
+        if self.ok and not self.pose_ranking_is_determined and len(self.poses) > 1:
+            lines.append(
+                "  the poses are not separated by more than the method's error, "
+                "so which one ranks first is not determined by the score"
+            )
         lines.extend(f"  WARNING: {warning}" for warning in self.warnings)
         return "\n".join(lines)
 
