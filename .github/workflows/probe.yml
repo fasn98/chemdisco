@@ -1,0 +1,71 @@
+name: Probe ChEMBL
+
+# A diagnostic, not a test. ChEMBL's REST filters change between releases and a
+# documented filter is not always a working one; this job asks the API directly
+# which endpoint forms answer.
+#
+# Output goes to the job summary and to annotations, because raw Actions logs are
+# not retrievable from every environment.
+
+on:
+  workflow_dispatch:
+    inputs:
+      accession:
+        description: "UniProt accession to probe"
+        required: false
+        default: "P56817"
+      gene:
+        description: "Gene symbol for the name-based probes"
+        required: false
+        default: "BACE1"
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install requests
+        run: python -m pip install --quiet requests
+
+      - name: Probe
+        run: |
+          mkdir -p runs
+          python scripts/probe_chembl.py \
+            --accession "${{ inputs.accession || 'P56817' }}" \
+            --gene "${{ inputs.gene || 'BACE1' }}" 2>&1 | tee runs/probe.log
+
+      - name: Report
+        if: always()
+        run: |
+          {
+            echo '## ChEMBL probe'
+            echo '```'
+            sed -n '1,/=== JSON ===/p' runs/probe.log 2>/dev/null || echo '(no output)'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Annotate the findings
+        if: always()
+        # The human-readable section only, before the JSON dump: annotations are
+        # capped and the one-line-per-probe summary is what matters.
+        run: |
+          if [ -f runs/probe.log ]; then
+            sed -n '1,/=== JSON ===/p' runs/probe.log | head -n 45 | while IFS= read -r line; do
+              clean=$(printf '%s' "$line" | tr -d '\r' | sed 's/%/%25/g')
+              [ -n "$clean" ] && echo "::error::${clean}"
+            done
+          fi
+
+      - name: Upload the full report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chembl-probe
+          path: runs/probe.log
+          if-no-files-found: warn
