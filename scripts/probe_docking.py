@@ -113,7 +113,7 @@ def probe_ligand_preparation(modules: dict[str, Any]) -> str | None:
 
     if modules.get("meeko") is None:
         record("meeko ligand prep", "fail", "meeko not importable")
-        return None
+        return _obabel_ligand(smiles)
 
     try:
         from meeko import MoleculePreparation
@@ -136,7 +136,53 @@ def probe_ligand_preparation(modules: dict[str, Any]) -> str | None:
         return pdbqt
     except Exception:
         record("meeko ligand prep", "fail", traceback.format_exc(limit=2)[-200:])
+        return _obabel_ligand(smiles)
+
+
+def _obabel_ligand(smiles: str) -> str | None:
+    """Fallback ligand preparation through OpenBabel's command line.
+
+    Worth having as more than a backup. Meeko's dependency chain is undeclared
+    and shifts between releases -- this probe found it needing first scipy, then
+    gemmi, neither named in its install -- while obabel is a single system
+    package that has produced PDBQT the same way for a decade.
+
+    The trade-off is real and not in obabel's favour: it assigns protonation by
+    simple rules at a fixed pH rather than per-microspecies, and its rotatable-
+    bond perception is cruder than Meeko's. For a basic amine that matters. So
+    this is the fallback, not the default -- but a working fallback beats a
+    preferred route that will not install.
+    """
+    print("  trying the OpenBabel fallback for ligand preparation")
+    try:
+        completed = subprocess.run(
+            ["obabel", f"-:{smiles}", "--gen3d", "-p", "7.4",
+             "-O", "ligand_ob.pdbqt"],
+            capture_output=True, text=True, timeout=180,
+        )
+    except FileNotFoundError:
+        record("obabel ligand prep", "fail", "obabel not installed")
         return None
+    except Exception as error:
+        record("obabel ligand prep", "fail", f"{type(error).__name__}: {error}")
+        return None
+
+    if completed.returncode != 0:
+        record("obabel ligand prep", "fail",
+               (completed.stderr or completed.stdout)[:160])
+        return None
+    try:
+        with open("ligand_ob.pdbqt") as handle:
+            text = handle.read()
+    except OSError as error:
+        record("obabel ligand prep", "fail", str(error))
+        return None
+
+    if "ATOM" not in text and "HETATM" not in text:
+        record("obabel ligand prep", "fail", "output contains no atom records")
+        return None
+    record("obabel ligand prep", "ok", f"{len(text.splitlines())} PDBQT lines")
+    return text
 
 
 def probe_receptor_preparation() -> str | None:

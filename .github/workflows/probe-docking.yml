@@ -40,7 +40,9 @@ jobs:
           python -m pip install --upgrade pip
           # scipy is a hard requirement of meeko that meeko does not pull in
           # itself; the first probe run failed on exactly that.
-          python -m pip install rdkit requests numpy scipy
+          # scipy and gemmi are hard requirements of meeko that meeko does not
+          # declare; successive probe runs found each in turn.
+          python -m pip install rdkit requests numpy scipy gemmi
           python -m pip install vina || echo "vina install failed"
           python -m pip install meeko || echo "meeko install failed"
           python -m pip list | grep -iE "vina|meeko|rdkit|scipy|numpy" || true
