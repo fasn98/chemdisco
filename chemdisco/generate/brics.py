@@ -42,6 +42,7 @@ from __future__ import annotations
 import random
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass, field
+from typing import ClassVar
 
 from ..chem.alerts import AlertReport, screen_alerts, synthetic_accessibility
 from ..chem.similarity import NoveltyVerdict, assess_novelty, diverse_subset
@@ -372,15 +373,29 @@ class PolicyAudit:
             return None
         return self.n_passing / self.n_actives
 
+    #: Pass rate below which the policy is treated as mis-calibrated.
+    #:
+    #: Set at 0.8, not 0.5. The first live BACE1 audit returned 52% -- 18 of 40
+    #: known actives rejected, almost all on Brenk alerts -- and a half threshold
+    #: called that acceptable. It is not. A structural-alert set exists to remove
+    #: compounds unlikely to become drugs; one that rejects two in five compounds
+    #: already proven to hit the target is measuring the wrong thing for this
+    #: chemistry. Twenty percent attrition on known actives is about the most a
+    #: filter can take before it is shaping the output more than the data is.
+    SUSPECT_PASS_RATE: ClassVar[float] = 0.8
+
     @property
     def policy_is_suspect(self) -> bool:
-        """Whether the policy rejects so many known actives as to be unusable here.
-
-        Half is the threshold: a policy that would discard most of the compounds
-        already proven to hit this target cannot sensibly referee proposals for it.
-        """
+        """Whether the policy rejects enough known actives to be unusable here."""
         rate = self.pass_rate
-        return rate is not None and rate < 0.5
+        return rate is not None and rate < self.SUSPECT_PASS_RATE
+
+    @property
+    def dominant_rule(self) -> str | None:
+        """The single filter responsible for the most rejected actives."""
+        if not self.rejections:
+            return None
+        return max(self.rejections.items(), key=lambda kv: kv[1])[0]
 
     def describe(self) -> str:
         if self.n_actives == 0:
@@ -393,13 +408,24 @@ class PolicyAudit:
         for rule, count in sorted(self.rejections.items(), key=lambda kv: -kv[1]):
             lines.append(f"  {count:>4} known active(s) rejected by {rule}")
         if self.policy_is_suspect:
+            rule = self.dominant_rule
             lines.append(
-                "  WARNING: this policy rejects most of the compounds already "
-                "known to hit this target. It is mis-calibrated for this "
-                "chemistry, so the generation attrition above says more about the "
-                "filters than about the candidates. Fix the policy to fit the "
-                "target class -- do not loosen it until something survives."
+                f"  WARNING: {1 - rate:.0%} of the compounds already known to hit "
+                "this target would be rejected by these filters"
+                + (f", mostly by '{rule}'" if rule else "")
+                + ". The policy is mis-calibrated for this chemistry, so the "
+                "generation attrition above says more about the filters than "
+                "about the candidates. Fix the policy to fit the target class -- "
+                "do not loosen it until something survives."
             )
+            if rule == "Brenk alert":
+                lines.append(
+                    "    Brenk was assembled to triage HTS decks for "
+                    "lead-likeness. Target classes whose genuine actives carry "
+                    "flagged motifs -- amidines and guanidines in aspartyl "
+                    "protease inhibitors, for one -- need it switched off rather "
+                    "than trusted."
+                )
             for smiles, reason in self.failing_examples:
                 lines.append(f"    {smiles[:70]} -> {reason}")
         return "\n".join(lines)

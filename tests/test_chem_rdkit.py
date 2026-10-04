@@ -434,6 +434,25 @@ class TestGeneration(unittest.TestCase):
             f"{audit.describe()}",
         )
 
+    def test_audit_threshold_catches_the_real_bace1_figure(self) -> None:
+        # Not a hypothetical. The first live BACE1 audit returned exactly this:
+        # 21 of 40 known actives surviving, 18 lost to Brenk. A half threshold
+        # called that acceptable, which is what prompted raising it to 0.8.
+        from chemdisco.generate import PolicyAudit
+
+        audit = PolicyAudit(
+            n_actives=40,
+            n_passing=21,
+            rejections={"Brenk alert": 18, "too large (over 50 heavy atoms)": 1},
+        )
+        self.assertTrue(audit.policy_is_suspect)
+        self.assertEqual(audit.dominant_rule, "Brenk alert")
+        text = audit.describe()
+        self.assertIn("48%", text)
+        # The Brenk-specific explanation must appear, since that is the
+        # actionable part.
+        self.assertIn("lead-likeness", text)
+
     def test_policy_audit_flags_a_mis_calibrated_policy(self) -> None:
         # The BACE1 case, in miniature. A size ceiling below the actives
         # themselves rejects the chemistry the generator is supposed to explore,
