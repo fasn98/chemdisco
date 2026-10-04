@@ -82,22 +82,31 @@ jobs:
         # Always, not only on failure: the metrics are the point of the run, and
         # raw job logs, job summaries and artifact downloads are all unreachable
         # from some environments. Annotations are the one channel the REST API
-        # serves, and GitHub caps their number rather than their length -- hence
-        # one annotation carrying the whole report, newlines encoded as %0A.
+        # serves, and GitHub caps their number rather than their length.
+        #
+        # Emitted in two halves because a single annotation's message is
+        # truncated in transit well before the documented limit, and the half
+        # that got cut was the generation report and the verdict.
         run: |
-          if [ -f runs/validate.log ]; then
-            payload=$(tail -c 50000 runs/validate.log \
-              | sed 's/%/%25/g' \
-              | sed 's/\r//' \
-              | awk '{printf "%s%%0A", $0}')
-            if [ "${{ steps.validate.outcome }}" = "success" ]; then
-              echo "::notice title=Validation output::${payload}"
-            else
-              echo "::error title=Validation output::${payload}"
-            fi
-          else
+          if [ ! -f runs/validate.log ]; then
             echo "::error::the validation step produced no captured output"
+            exit 0
           fi
+          level=error
+          [ "${{ steps.validate.outcome }}" = "success" ] && level=notice
+
+          total=$(wc -l < runs/validate.log)
+          half=$(( (total + 1) / 2 ))
+
+          encode() {
+            sed 's/%/%25/g' | sed 's/\r//' | awk '{printf "%s%%0A", $0}'
+          }
+
+          head_payload=$(head -n "$half" runs/validate.log | encode)
+          tail_payload=$(tail -n +"$((half + 1))" runs/validate.log | encode)
+
+          echo "::${level} title=Validation 1 of 2::${head_payload}"
+          echo "::${level} title=Validation 2 of 2::${tail_payload}"
 
       - name: Upload the summary
         if: always()
