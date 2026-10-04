@@ -670,3 +670,112 @@ class TestConservedFeatures(unittest.TestCase):
         self.assertEqual(result.n_flagged, 1)
         self.assertEqual(result.n_retaining, 2)
         self.assertIn("retain none", result.describe())
+
+
+@requires_rdkit
+class TestRecombinationArtefacts(unittest.TestCase):
+    """Two inhibitors glued together is not a candidate.
+
+    From the BACE1 shortlist. Fragment recombination produced molecules at 51-59
+    heavy atoms carrying two complete warheads apiece -- an aminohydantoin and an
+    aminoimidazole, or an aminoimidazole and an aminothiazine. Each is two drugs
+    end to end, and will fail every developability criterion whatever it scores.
+    A presence check sees only "has the motif" and waves it through.
+    """
+
+    # A real survivor from the shortlist, carrying two amidine-type warheads.
+    TWO_WARHEADS = (
+        "CN1C(=O)[C@]2(N=C1N)c1cc(OC(F)F)ccc1Oc1c(F)cc(-c3ccc4c(c3)"
+        "[C@]3(N=C(N)n5ccnc53)c3cc(-c5ccc(F)c(Cl)c5)cc(F)c3O4)cc12"
+    )
+    ONE_WARHEAD = "CCC1(c2cccc(-c3ccc(F)c(F)c3)c2)COCC(N)=N1"
+
+    def _profile(self):
+        from chemdisco.generate import profile_actives
+
+        actives = [self.ONE_WARHEAD] * 12
+        background = TestConservedFeatures.BACKGROUND
+        return profile_actives(actives, background_smiles=background)
+
+    def test_counts_are_reported_not_just_presence(self) -> None:
+        from chemdisco.generate import feature_counts
+
+        counts = feature_counts(self.TWO_WARHEADS)
+        self.assertGreater(counts.get("amidine", 0), 1)
+        self.assertEqual(feature_counts(self.ONE_WARHEAD).get("amidine"), 1)
+
+    def test_a_doubled_warhead_is_flagged_as_an_artefact(self) -> None:
+        from chemdisco.generate import check_candidate
+
+        verdict = check_candidate(self.TWO_WARHEADS, self._profile())
+        self.assertTrue(verdict.looks_like_two_molecules)
+        self.assertIn("amidine", verdict.duplicated)
+        self.assertIn("two drugs end to end", verdict.describe())
+
+    def test_a_single_warhead_is_not_flagged(self) -> None:
+        from chemdisco.generate import check_candidate
+
+        verdict = check_candidate(self.ONE_WARHEAD, self._profile())
+        self.assertFalse(verdict.looks_like_two_molecules)
+        self.assertTrue(verdict.retains_strong)
+
+    def test_an_ordinary_biaryl_is_not_called_two_molecules(self) -> None:
+        # Two aromatic rings is a biaryl, not two drugs. Only a discriminating
+        # motif appearing twice counts.
+        from chemdisco.generate import check_candidate
+
+        verdict = check_candidate("CCC1(c2ccc(-c3ccccc3)cc2)COCC(N)=N1", self._profile())
+        self.assertFalse(verdict.looks_like_two_molecules)
+
+    def test_heavy_atom_count_travels_with_the_verdict(self) -> None:
+        from chemdisco.generate import check_candidate
+
+        verdict = check_candidate(self.TWO_WARHEADS, self._profile())
+        self.assertGreater(verdict.heavy_atoms, 45)
+
+
+@requires_rdkit
+class TestFeatureStrength(unittest.TestCase):
+    """Clearing the bar on a peripheral group is weak evidence.
+
+    One BACE1 survivor retained only ``halogen_on_aromatic`` -- enriched enough
+    over the background to count as conserved, but not plausibly what engages the
+    catalytic dyad -- while carrying no basic nitrogen at all.
+    """
+
+    def _profile(self):
+        from chemdisco.generate import profile_actives
+
+        return profile_actives(
+            [TestConservedFeatures.WITH_AMIDINE, TestConservedFeatures.AMINOTHIAZINE] * 6,
+            background_smiles=TestConservedFeatures.BACKGROUND,
+        )
+
+    def test_the_strongest_features_are_identified(self) -> None:
+        profile = self._profile()
+        self.assertIn("amidine", profile.most_discriminating)
+
+    def test_a_weakly_enriched_feature_is_excluded_from_the_strong_set(self) -> None:
+        profile = self._profile()
+        if "halogen_on_aromatic" in profile.conserved:
+            self.assertNotIn("halogen_on_aromatic", profile.most_discriminating)
+
+    def test_retaining_only_a_peripheral_feature_is_called_weak(self) -> None:
+        from chemdisco.generate import check_candidate
+
+        profile = self._profile()
+        # A halogenated aromatic with no basic nitrogen.
+        verdict = check_candidate("Clc1ccc(-c2ccc(F)cc2)cc1", profile)
+        if verdict.retains_any:
+            self.assertFalse(verdict.retains_strong)
+            self.assertIn("peripheral", verdict.describe())
+
+    def test_without_a_background_every_conserved_feature_counts_as_strong(self) -> None:
+        # Nothing can be ranked without a comparison set, and pretending
+        # otherwise would invent a hierarchy.
+        from chemdisco.generate import profile_actives
+
+        profile = profile_actives(
+            [TestConservedFeatures.WITH_AMIDINE] * 12
+        )
+        self.assertEqual(profile.most_discriminating, profile.conserved)

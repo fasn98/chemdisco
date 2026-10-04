@@ -124,6 +124,39 @@ class FeatureProfile:
         return self.n_background >= 10
 
     @property
+    def most_discriminating(self) -> tuple[str, ...]:
+        """The conserved features that separate actives from background best.
+
+        Conservation plus modest enrichment is a low bar, and a candidate can
+        clear it on something peripheral. One BACE1 survivor retained only
+        ``halogen_on_aromatic`` -- enriched enough to count, but unlikely to be
+        what engages the catalytic dyad -- while carrying no basic nitrogen at
+        all.
+
+        This takes the features whose enrichment is at least half the best
+        observed, which on the BACE1 set keeps the amidine and basic-amine motifs
+        (absent from the background entirely) and drops the aromatic halogen.
+        Derived from the measurement, not from a hand-written list of what
+        matters.
+        """
+        if not self.has_background or not self.conserved:
+            return self.conserved
+        ratios: dict[str, float] = {}
+        for name in self.conserved:
+            ratio = self.enrichment(name)
+            if ratio is None:
+                continue
+            # Infinite enrichment -- present in actives, absent from background --
+            # is the strongest signal there is; cap it so it can be compared.
+            ratios[name] = 1000.0 if ratio == float("inf") else ratio
+        if not ratios:
+            return self.conserved
+        best = max(ratios.values())
+        return tuple(
+            sorted(name for name, ratio in ratios.items() if ratio >= best / 2.0)
+        )
+
+    @property
     def is_informative(self) -> bool:
         """Whether this profile can support a judgement about a candidate.
 
@@ -201,22 +234,63 @@ class FeatureProfile:
 
 @dataclass(frozen=True, slots=True)
 class FeatureVerdict:
-    """Whether one candidate retains what the actives share."""
+    """Whether one candidate retains what the actives share, and how cleanly.
+
+    Attributes:
+        present: Conserved features the candidate carries.
+        missing: Conserved features it lacks.
+        strong_present: Of those carried, the ones among the most discriminating.
+        duplicated: Features appearing more than once, with their counts. Two
+            copies of the anchoring motif is the signature of two inhibitors
+            glued together rather than one molecule designed.
+        heavy_atoms: Size, reported because a duplicated motif and a large count
+            are the same finding seen twice.
+    """
 
     smiles: str
     present: tuple[str, ...]
     missing: tuple[str, ...]
+    strong_present: tuple[str, ...] = ()
+    duplicated: dict[str, int] = field(default_factory=dict)
+    heavy_atoms: int = 0
     error: str | None = None
 
     @property
     def retains_any(self) -> bool:
         return bool(self.present)
 
+    @property
+    def retains_strong(self) -> bool:
+        """Whether it keeps a feature that actually separates actives."""
+        return bool(self.strong_present)
+
+    @property
+    def looks_like_two_molecules(self) -> bool:
+        """Whether this is a recombination artefact rather than a candidate."""
+        return bool(self.duplicated)
+
     def describe(self) -> str:
         if self.error:
             return f"feature check failed: {self.error}"
+        if self.looks_like_two_molecules:
+            duplicated = ", ".join(
+                f"{name} x{count}" for name, count in sorted(self.duplicated.items())
+            )
+            return (
+                f"carries {duplicated} across {self.heavy_atoms} heavy atoms. "
+                "Fragment recombination glues whole inhibitors together, and a "
+                "molecule with two anchoring motifs is two drugs end to end "
+                "rather than one designed candidate -- it will fail every "
+                "developability criterion whatever it scores."
+            )
+        if self.retains_strong:
+            return "retains " + ", ".join(self.strong_present)
         if self.retains_any:
-            return "retains " + ", ".join(self.present)
+            return (
+                "retains only " + ", ".join(self.present) + ", none of which is "
+                "among the features that most separate actives from background. "
+                "Clearing the bar on a peripheral group is weak evidence."
+            )
         return (
             "retains NONE of the conserved features ("
             + ", ".join(self.missing)
@@ -239,15 +313,29 @@ def _compiled_patterns() -> dict[str, object]:
 
 def features_of(smiles: str) -> set[str]:
     """Which patterns a structure matches."""
+    return set(feature_counts(smiles))
+
+
+def feature_counts(smiles: str) -> dict[str, int]:
+    """How many times each pattern matches, not merely whether it does.
+
+    The count matters, and the BACE1 run showed why. Fragment recombination
+    readily glues two complete inhibitors together: candidates appeared carrying
+    an aminohydantoin *and* an aminoimidazole, or an aminoimidazole *and* an
+    aminothiazine, at 58 heavy atoms and a molecular weight near 800. Each is two
+    drugs stapled end to end rather than a designed molecule, and a presence
+    check sees only "has the motif" and waves it through.
+    """
     require_rdkit()
     mol = Chem.MolFromSmiles((smiles or "").strip())
     if mol is None:
-        return set()
-    return {
-        name
-        for name, pattern in _compiled_patterns().items()
-        if mol.HasSubstructMatch(pattern)  # type: ignore[arg-type]
-    }
+        return {}
+    counts: dict[str, int] = {}
+    for name, pattern in _compiled_patterns().items():
+        matches = mol.GetSubstructMatches(pattern, uniquify=True)  # type: ignore[arg-type]
+        if matches:
+            counts[name] = len(matches)
+    return counts
 
 
 def _prevalence(smiles_list: Sequence[str]) -> tuple[dict[str, float], int]:
@@ -348,10 +436,26 @@ def check_candidate(smiles: str, profile: FeatureProfile) -> FeatureVerdict:
     if mol is None:
         return FeatureVerdict(smiles, (), (), error="structure failed to parse")
 
-    found = features_of(smiles)
-    present = tuple(sorted(name for name in profile.conserved if name in found))
-    missing = tuple(sorted(name for name in profile.conserved if name not in found))
-    return FeatureVerdict(smiles=smiles, present=present, missing=missing)
+    counts = feature_counts(smiles)
+    present = tuple(sorted(name for name in profile.conserved if name in counts))
+    missing = tuple(sorted(name for name in profile.conserved if name not in counts))
+    strong = profile.most_discriminating
+    strong_present = tuple(sorted(name for name in strong if name in counts))
+    # Only a *discriminating* motif appearing twice indicates two molecules
+    # joined. Two aromatic rings is an ordinary biaryl.
+    duplicated = {
+        name: counts[name]
+        for name in strong
+        if counts.get(name, 0) > 1
+    }
+    return FeatureVerdict(
+        smiles=smiles,
+        present=present,
+        missing=missing,
+        strong_present=strong_present,
+        duplicated=duplicated,
+        heavy_atoms=mol.GetNumHeavyAtoms(),
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -373,6 +477,18 @@ class FeatureScreenResult:
             if not verdict.retains_any and verdict.error is None
         )
 
+    @property
+    def n_weak_only(self) -> int:
+        return sum(
+            1
+            for verdict in self.verdicts
+            if verdict.retains_any and not verdict.retains_strong
+        )
+
+    @property
+    def n_duplicated(self) -> int:
+        return sum(1 for verdict in self.verdicts if verdict.looks_like_two_molecules)
+
     def describe(self) -> str:
         lines = [self.profile.describe(), ""]
         if not self.profile.is_informative:
@@ -391,6 +507,22 @@ class FeatureScreenResult:
                 "  The flagged candidates may fill the pocket while lacking the "
                 "chemistry that binds it. A docking score cannot distinguish the "
                 "two, which is why this check exists alongside it."
+            )
+        if self.profile.most_discriminating:
+            lines.append(
+                "  Most discriminating features: "
+                + ", ".join(self.profile.most_discriminating)
+            )
+        if self.n_weak_only:
+            lines.append(
+                f"  {self.n_weak_only} candidate(s) clear the bar only on a "
+                "peripheral feature, which is weak evidence."
+            )
+        if self.n_duplicated:
+            lines.append(
+                f"  {self.n_duplicated} candidate(s) carry an anchoring motif more "
+                "than once: fragment recombination joined whole inhibitors rather "
+                "than designing one molecule."
             )
         return "\n".join(lines)
 

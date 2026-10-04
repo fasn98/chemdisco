@@ -306,18 +306,31 @@ def combine(directory: pathlib.Path, output: str) -> int:
     # accessibility was a polyfluorinated biaryl nitrile with no basic nitrogen,
     # scoring -9.19 against an aspartyl protease whose inhibitors all need one.
     with_features = [
-        c for c in passing_score if c.get("retains_conserved_feature") is not False
+        c for c in passing_score if c.get("retains_strong_feature") is not False
     ]
     dropped_features = len(passing_score) - len(with_features)
     if dropped_features:
         print(
-            f"  {dropped_features} of those retain NONE of the features conserved "
-            "among the known actives, and are set aside: fragment recombination "
-            "can leave a well-shaped molecule with no way to engage the target, "
-            "and a docking score cannot tell the difference."
+            f"  {dropped_features} of those retain none of the features that most "
+            "separate actives from background, and are set aside: fragment "
+            "recombination can leave a well-shaped molecule with no way to engage "
+            "the target, and a docking score cannot tell the difference."
         )
 
-    survivors = with_features
+    # A candidate carrying the anchoring motif twice is two inhibitors joined,
+    # not one molecule. The BACE1 run produced several at 51-59 heavy atoms with
+    # two complete warheads apiece -- they will fail every developability
+    # criterion whatever they score.
+    single_molecule = [c for c in with_features if not c.get("duplicated_motifs")]
+    dropped_duplicates = len(with_features) - len(single_molecule)
+    if dropped_duplicates:
+        print(
+            f"  {dropped_duplicates} carry an anchoring motif more than once and "
+            "are set aside as recombination artefacts: two drugs glued end to "
+            "end rather than one designed candidate."
+        )
+
+    survivors = single_molecule
     efficiencies = [
         c["ligand_efficiency"]
         for c in survivors
@@ -504,7 +517,10 @@ def main() -> int:
     feature_by_smiles = {
         verdict.smiles: {
             "present": list(verdict.present),
+            "strong_present": list(verdict.strong_present),
             "retains_any": verdict.retains_any,
+            "retains_strong": verdict.retains_strong,
+            "duplicated": dict(verdict.duplicated),
         }
         for verdict in feature_screen.verdicts
     }
@@ -548,7 +564,10 @@ def main() -> int:
                     "sascore": sascore_by_smiles.get(docked.smiles),
                     "novelty": novelty_by_smiles.get(docked.smiles),
                     "retains_conserved_feature": features.get("retains_any"),
-                    "conserved_features": features.get("present", []),
+                    "retains_strong_feature": features.get("retains_strong"),
+                    "conserved_features": features.get("strong_present")
+                    or features.get("present", []),
+                    "duplicated_motifs": features.get("duplicated", {}),
                 }
             )
 
