@@ -449,3 +449,62 @@ class TestTriage(unittest.TestCase):
         with self.assertRaises(ValueError) as context:
             triage_candidates(self._candidates(), [])
         self.assertIn("no meaning without a distribution", str(context.exception))
+
+
+class TestTimeBudget(unittest.TestCase):
+    """A screen that outruns its environment's limit must keep what it has."""
+
+    def test_interleaving_keeps_every_prefix_balanced(self) -> None:
+        # The failure this prevents: supplied in blocks, a truncated run holds
+        # every active and no decoys, which cannot support an enrichment
+        # estimate at all.
+        from chemdisco.dock import interleave_by_label
+
+        smiles = [f"a{i}" for i in range(5)] + [f"d{i}" for i in range(15)]
+        labels = [1] * 5 + [0] * 15
+        ordered_smiles, ordered_labels = interleave_by_label(smiles, labels)
+
+        self.assertEqual(len(ordered_smiles), 20)
+        self.assertEqual(sorted(ordered_labels), sorted(labels))
+        # Every reasonably sized prefix contains both groups.
+        for cut in (4, 8, 12, 16):
+            with self.subTest(cut=cut):
+                self.assertEqual(set(ordered_labels[:cut]), {0, 1})
+
+    def test_interleaving_preserves_every_ligand(self) -> None:
+        from chemdisco.dock import interleave_by_label
+
+        smiles = [f"a{i}" for i in range(3)] + [f"d{i}" for i in range(7)]
+        labels = [1] * 3 + [0] * 7
+        ordered_smiles, _ = interleave_by_label(smiles, labels)
+        self.assertEqual(sorted(ordered_smiles), sorted(smiles))
+
+    def test_mismatched_lengths_raise(self) -> None:
+        from chemdisco.dock import interleave_by_label
+
+        with self.assertRaises(ValueError):
+            interleave_by_label(["a", "b"], [1])
+
+    def test_a_truncated_screen_says_it_is_truncated(self) -> None:
+        from chemdisco.dock import DockingResult, Pose, ScreenResult
+
+        result = ScreenResult(
+            results=[DockingResult("A", [Pose(1, -9.0)])],
+            labels=[1],
+            n_requested=50,
+            stopped_early="time budget of 60s reached after 1 of 50 ligands",
+            elapsed_seconds=61.0,
+        )
+        text = result.describe()
+        self.assertIn("STOPPED EARLY", text)
+        self.assertIn("1 of 50", text)
+
+    def test_throughput_is_reported_for_planning(self) -> None:
+        from chemdisco.dock import DockingResult, Pose, ScreenResult
+
+        result = ScreenResult(
+            results=[DockingResult(f"L{i}", [Pose(1, -8.0)]) for i in range(10)],
+            elapsed_seconds=200.0,
+        )
+        self.assertAlmostEqual(result.seconds_per_ligand, 20.0)
+        self.assertIn("20.0s each", result.describe())

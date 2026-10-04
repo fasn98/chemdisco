@@ -28,7 +28,12 @@ from .enrichment import (
     enrichment_factor,
     max_enrichment_factor,
 )
-from .screen import ScreenResult, screen, triage_candidates
+from .screen import (
+    ScreenResult,
+    interleave_by_label,
+    screen,
+    triage_candidates,
+)
 from .box import (
     Box,
     atoms_within,
@@ -83,6 +88,7 @@ __all__ = [
     "bedroc",
     "describe_property_gap",
     "enrichment_factor",
+    "interleave_by_label",
     "max_enrichment_factor",
     "property_gap",
     "screen",

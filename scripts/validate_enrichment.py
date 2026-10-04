@@ -56,6 +56,7 @@ from chemdisco.curate import CurationPolicy, curate  # noqa: E402
 from chemdisco.data.chembl import ChEMBLClient, ChEMBLError, ResponseCache  # noqa: E402
 from chemdisco.dock import (  # noqa: E402
     analyse_enrichment,
+    interleave_by_label,
     box_from_ligand,
     describe_property_gap,
     parse_pdb,
@@ -110,9 +111,18 @@ def main() -> int:
         default=5.5,
         help="Maximum pActivity to be eligible as a decoy",
     )
-    parser.add_argument("--n-actives", type=int, default=30)
-    parser.add_argument("--decoys-per-active", type=int, default=5)
+    parser.add_argument("--n-actives", type=int, default=20)
+    parser.add_argument("--decoys-per-active", type=int, default=3)
     parser.add_argument("--exhaustiveness", type=int, default=8)
+    parser.add_argument(
+        "--time-budget",
+        type=float,
+        default=1500.0,
+        help=(
+            "Seconds to spend docking before stopping and reporting what was "
+            "done. A screen killed by its environment's limit returns nothing"
+        ),
+    )
     parser.add_argument("--max-records", type=int, default=8000)
     parser.add_argument("--cache", default=".cache")
     parser.add_argument("--output", default="")
@@ -275,7 +285,13 @@ def main() -> int:
     heading("5. Docking actives and decoys into the same receptor and box")
     ligands = [p.smiles for p in actives] + [p.smiles for p in decoys]
     labels = [1] * len(actives) + [0] * len(decoys)
-    print(f"  {len(ligands)} ligands at exhaustiveness {args.exhaustiveness}")
+    # Interleaved so a truncated run stays balanced. In blocks, a run cut short
+    # by the time budget would hold every active and no decoys.
+    ligands, labels = interleave_by_label(ligands, labels)
+    print(
+        f"  {len(ligands)} ligands at exhaustiveness {args.exhaustiveness}, "
+        f"interleaved, budget {args.time_budget:.0f}s"
+    )
 
     def progress(done: int, total: int, _result) -> None:
         if done % 25 == 0 or done == total:
@@ -290,6 +306,7 @@ def main() -> int:
         progress=progress,
         exhaustiveness=args.exhaustiveness,
         n_poses=3,
+        time_budget_seconds=args.time_budget,
     )
     print("\n" + screen_result.describe())
 

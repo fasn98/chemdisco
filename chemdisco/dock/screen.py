@@ -39,6 +39,10 @@ class ScreenResult:
         receptor_id: The single receptor every ligand was docked into.
         box: The single search box used.
         elapsed_seconds: Wall-clock time, for planning larger runs.
+        stopped_early: Set when a time budget cut the run short, so a partial
+            screen is never mistaken for a complete one.
+        n_requested: How many ligands were asked for, which differs from
+            ``n_total`` when the run stopped early.
     """
 
     results: list[DockingResult] = field(default_factory=list)
@@ -46,6 +50,8 @@ class ScreenResult:
     receptor_id: str = ""
     box: Box | None = None
     elapsed_seconds: float = 0.0
+    stopped_early: str = ""
+    n_requested: int = 0
 
     @property
     def n_total(self) -> int:
@@ -58,6 +64,11 @@ class ScreenResult:
     @property
     def n_failed(self) -> int:
         return self.n_total - self.n_succeeded
+
+    @property
+    def seconds_per_ligand(self) -> float:
+        """Throughput, which is what a larger run has to be planned against."""
+        return self.elapsed_seconds / self.n_total if self.n_total else 0.0
 
     def failure_reasons(self) -> dict[str, int]:
         counts: dict[str, int] = {}
@@ -112,9 +123,16 @@ class ScreenResult:
     def describe(self) -> str:
         lines = [
             f"Screened {self.n_total} ligand(s) against "
-            f"{self.receptor_id or 'a receptor'} in {self.elapsed_seconds:.0f}s",
+            f"{self.receptor_id or 'a receptor'} in {self.elapsed_seconds:.0f}s"
+            + (
+                f" ({self.seconds_per_ligand:.1f}s each)"
+                if self.seconds_per_ligand
+                else ""
+            ),
             f"  {self.n_succeeded} docked, {self.n_failed} failed",
         ]
+        if self.stopped_early:
+            lines.append(f"  STOPPED EARLY: {self.stopped_early}")
         for reason, count in self.failure_reasons().items():
             lines.append(f"    {count:>5} {reason}")
 
@@ -144,6 +162,7 @@ def screen(
     labels: Sequence[int] | None = None,
     receptor_id: str = "",
     progress: Callable[[int, int, DockingResult], None] | None = None,
+    time_budget_seconds: float | None = None,
     **dock_kwargs,
 ) -> ScreenResult:
     """Dock every ligand in ``smiles_list`` into one receptor.
@@ -156,11 +175,22 @@ def screen(
         labels: Optional 1/0 group labels, required for enrichment analysis.
         receptor_id: Recorded on the result and in each score's provenance.
         progress: Called after each ligand with ``(index, total, result)``.
+        time_budget_seconds: Stop and return what has been docked so far once
+            this much time has elapsed. Without it a screen that outruns its
+            environment's limit is killed and returns nothing -- which is how an
+            hour of docking produces no data at all. Stopping deliberately keeps
+            the partial result and records that it is partial.
         **dock_kwargs: Passed through to :func:`chemdisco.dock.engine.dock`.
 
     Returns:
-        A :class:`ScreenResult` holding one entry per input ligand, failures
+        A :class:`ScreenResult` holding one entry per docked ligand, failures
         included and in input order, so the labels stay aligned.
+
+    Note:
+        When a budget cuts the run short, the ligands docked are a *prefix* of
+        the input. If actives and decoys are supplied in blocks, the prefix is
+        all actives and no decoys, which is useless. Interleave the groups before
+        calling, or accept that a truncated run must be discarded.
     """
     if labels is not None and len(labels) != len(smiles_list):
         raise ValueError(
@@ -169,21 +199,62 @@ def screen(
 
     started = time.monotonic()
     result = ScreenResult(
-        labels=list(labels) if labels is not None else [],
+        labels=[],
         receptor_id=receptor_id,
         box=box,
+        n_requested=len(smiles_list),
     )
+    all_labels = list(labels) if labels is not None else []
 
     for index, smiles in enumerate(smiles_list):
+        if time_budget_seconds is not None:
+            elapsed = time.monotonic() - started
+            if elapsed > time_budget_seconds:
+                result.stopped_early = (
+                    f"time budget of {time_budget_seconds:.0f}s reached after "
+                    f"{index} of {len(smiles_list)} ligands"
+                )
+                break
         docked = dock(
             smiles, receptor_pdbqt, box, receptor_id=receptor_id, **dock_kwargs
         )
         result.results.append(docked)
+        if all_labels:
+            result.labels.append(all_labels[index])
         if progress is not None:
             progress(index + 1, len(smiles_list), docked)
 
     result.elapsed_seconds = time.monotonic() - started
     return result
+
+
+def interleave_by_label(
+    smiles_list: Sequence[str], labels: Sequence[int]
+) -> tuple[list[str], list[int]]:
+    """Reorder so each group is spread evenly through the run.
+
+    Necessary whenever a time budget might truncate a screen. Supplied in
+    blocks, a truncated run holds every active and no decoys, which cannot
+    support an enrichment estimate at all. Interleaved, a truncated run is a
+    smaller but still balanced screen -- less precise, but usable.
+    """
+    if len(smiles_list) != len(labels):
+        raise ValueError(f"{len(smiles_list)} ligands against {len(labels)} labels")
+
+    groups: dict[int, list[str]] = {}
+    for smiles, label in zip(smiles_list, labels, strict=True):
+        groups.setdefault(label, []).append(smiles)
+
+    ordered_smiles: list[str] = []
+    ordered_labels: list[int] = []
+    # Round-robin across the groups, largest first, so the ratio holds at every
+    # prefix rather than only at the end.
+    while any(groups.values()):
+        for label in sorted(groups, key=lambda key: -len(groups[key])):
+            if groups[label]:
+                ordered_smiles.append(groups[label].pop(0))
+                ordered_labels.append(label)
+    return ordered_smiles, ordered_labels
 
 
 def triage_candidates(
