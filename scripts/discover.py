@@ -239,6 +239,7 @@ def combine(directory: pathlib.Path, output: str) -> int:
         return 1
 
     reference_scores: list[float] = []
+    reference_efficiencies: list[float | None] = []
     candidates: list[dict] = []
     receptors: set[str] = set()
     boxes: set[str] = set()
@@ -248,6 +249,7 @@ def combine(directory: pathlib.Path, output: str) -> int:
     for path in shards:
         payload = json.loads(path.read_text())
         reference_scores.extend(payload["reference_scores"])
+        reference_efficiencies.extend(payload.get("reference_efficiencies", []))
         candidates.extend(payload["candidates"])
         receptors.add(payload["receptor_id"])
         boxes.add(payload["box_signature"])
@@ -280,18 +282,55 @@ def combine(directory: pathlib.Path, output: str) -> int:
     heading("4. Triage against the reference distribution")
     reference = np.asarray(reference_scores)
     print(
-        f"  reference actives: median {np.median(reference):.2f}, "
+        f"  reference actives by raw score: median {np.median(reference):.2f}, "
         f"range {reference.min():.2f} to {reference.max():.2f} kcal/mol"
     )
 
-    threshold = float(np.median(reference))
-    passing_score = [
-        c for c in candidates if c["score"] is not None and c["score"] <= threshold
+    reference_le = [
+        value for value in reference_efficiencies if value is not None
     ]
-    print(
-        f"\n  {len(passing_score)} of {len(candidates)} candidates score at or "
-        f"below {threshold:.2f} kcal/mol, the median known active."
-    )
+    if reference_le:
+        print(
+            f"  reference actives by ligand efficiency: median "
+            f"{np.median(reference_le):.3f}, range {min(reference_le):.3f} to "
+            f"{max(reference_le):.3f} kcal/mol/atom"
+        )
+
+    # Triage on ligand efficiency, not raw score.
+    #
+    # The raw-score threshold was wrong, and this package documented why three
+    # files away: Vina's score grows close to linearly with molecular size, so
+    # "beats the median known active" selects for being large. The way BRICS
+    # produces large molecules from inhibitor fragments is by joining warheads,
+    # so the threshold selected recombination artefacts with near-perfect
+    # efficiency -- a run where all 13 candidates clearing it carried the
+    # anchoring motif twice, and nothing survived.
+    #
+    # Efficiency per heavy atom removes the size term from the comparison, which
+    # is the whole reason the metric exists.
+    if reference_le:
+        threshold = float(np.median(reference_le))
+        passing_score = [
+            c
+            for c in candidates
+            if c.get("ligand_efficiency") is not None
+            and c["ligand_efficiency"] <= threshold
+        ]
+        print(
+            f"\n  {len(passing_score)} of {len(candidates)} candidates reach a "
+            f"ligand efficiency of {threshold:.3f} kcal/mol/atom or better, the "
+            "median known active."
+        )
+    else:
+        threshold = float(np.median(reference))
+        passing_score = [
+            c for c in candidates if c["score"] is not None and c["score"] <= threshold
+        ]
+        print(
+            f"\n  no reference efficiencies available, falling back to raw score: "
+            f"{len(passing_score)} of {len(candidates)} reach {threshold:.2f} "
+            "kcal/mol. This comparison is confounded by molecular size."
+        )
 
     # Two corrections the first shortlist needed, both following from what this
     # package already documents about docking.
@@ -385,22 +424,36 @@ def combine(directory: pathlib.Path, output: str) -> int:
                 print(f"     retains: {', '.join(conserved)}")
 
     heading("What these are, and what they are not")
-    print(
-        "These structures have NO predicted potency. Generated candidates sit\n"
-        "outside the QSAR model's applicability domain almost by construction --\n"
-        "the reason to generate them is that they are new, and new is exactly\n"
-        "where the model has no basis to predict. Attaching an IC50 to them would\n"
-        "be inventing a number.\n"
-        "\n"
-        "What the evidence supports: they are novel against the curated ChEMBL\n"
-        "set, synthetically plausible by SAscore, free of PAINS alerts, and they\n"
-        "occupy the BACE1 site about as well as known inhibitors do in the same\n"
-        "receptor and box.\n"
-        "\n"
-        "That is a shortlist worth a chemist's hour. It is not a result, and the\n"
-        "only way to find out whether any of them bind is to make them and test\n"
-        "them."
-    )
+    if not survivors:
+        print(
+            "There is no shortlist from this run, which is itself the finding.\n"
+            "\n"
+            "The attrition above says where the candidates went. If most were set\n"
+            "aside as recombination artefacts, the fragment set and the threshold\n"
+            "together are selecting for molecules joined end to end rather than\n"
+            "for designs -- more fragments or a different generator would be the\n"
+            "response, not a looser filter.\n"
+            "\n"
+            "An empty list is a usable answer. A list assembled by relaxing the\n"
+            "checks until something appeared would not be."
+        )
+    else:
+        print(
+            "These structures have NO predicted potency. Generated candidates sit\n"
+            "outside the QSAR model's applicability domain almost by construction --\n"
+            "the reason to generate them is that they are new, and new is exactly\n"
+            "where the model has no basis to predict. Attaching an IC50 to them would\n"
+            "be inventing a number.\n"
+            "\n"
+            "What the evidence supports: they are novel against the curated ChEMBL\n"
+            "set, synthetically plausible by SAscore, free of PAINS alerts, and they\n"
+            "occupy the BACE1 site about as well as known inhibitors do in the same\n"
+            "receptor and box.\n"
+            "\n"
+            "That is a shortlist worth a chemist's hour. It is not a result, and the\n"
+            "only way to find out whether any of them bind is to make them and test\n"
+            "them."
+        )
 
     if output:
         path = pathlib.Path(output)
@@ -543,12 +596,17 @@ def main() -> int:
     print("\n" + result.describe())
 
     reference_scores: list[float] = []
+    reference_efficiencies: list[float | None] = []
     candidate_rows: list[dict] = []
     for docked, label in zip(result.results, result.labels, strict=True):
         if not docked.ok or docked.best_score is None:
             continue
         if label == 1:
             reference_scores.append(docked.best_score)
+            efficiency = docked.ligand_efficiency()
+            reference_efficiencies.append(
+                efficiency.value if efficiency.is_known else None
+            )
         else:
             features = feature_by_smiles.get(docked.smiles, {})
             candidate_rows.append(
@@ -578,6 +636,7 @@ def main() -> int:
             {
                 "shard": args.shard,
                 "reference_scores": reference_scores,
+                "reference_efficiencies": reference_efficiencies,
                 "candidates": candidate_rows,
                 "receptor_id": args.pdb.upper(),
                 "box_signature": f"{box.center}|{box.size}",
