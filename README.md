@@ -133,6 +133,7 @@ chemdisco/
     similarity.py      Tanimoto, novelty assessment, diverse subsets
   generate/                                                        [RDKit edge]
     brics.py           fragment recombination with a filter cascade
+    pharmacophore.py   conserved-feature profiling, withheld when unusable
   data/                                                          [network edge]
     chembl.py          cached, rate-limited client with the assay join
 ```
@@ -302,6 +303,92 @@ a believable wrong answer:
    on a fixed phase. The pooled result survived only because every shard
    finished.
 
+## The full pipeline, run end to end
+
+`scripts/discover.py` assembles everything above on one target and produces a
+shortlist — or, as often, a reasoned empty one. On BACE1 against 4FRS, roughly
+50 CPU-minutes across six shards:
+
+```
+48 candidates docked alongside 30 reference actives, one receptor, one box
+12 reach the reference median ligand efficiency (-0.260 kcal/mol/atom)
+ 0 are recombination artefacts
+12 on the shortlist, 16-41 heavy atoms, SAscore 3.5-5.3,
+   Tanimoto 0.30-0.72 to the nearest known compound
+```
+
+Eleven of the twelve carry a genuine BACE1 warhead — aminooxazine, aminothiazine,
+aminoimidazoline — without any rule requiring one, because the fragments came
+from potent inhibitors and the efficiency threshold favours compact molecules
+where the warhead dominates the atom count.
+
+**The shortlist carries no potency prediction.** Generated candidates sit outside
+the QSAR model's applicability domain almost by construction: the reason to
+generate them is that they are new, which is exactly where the model has no basis
+to predict. Attaching an IC50 would be inventing a number. It is a shortlist worth
+a chemist's hour, not a result.
+
+### Five method errors this run produced
+
+Each returned a believable wrong answer, and each was found by reading the output
+rather than by a test failing.
+
+**The threshold selected for molecular weight.** An earlier run returned zero
+survivors because all 13 candidates clearing the raw-score threshold carried the
+anchoring motif twice. Two things conspired: Vina's score grows close to linearly
+with size, and the way BRICS makes a large molecule from inhibitor fragments is by
+joining warheads. So "beats the median known active" selected for size, and size
+in this fragment space means two drugs glued end to end. The correction — compare
+ligand efficiency, not raw score — was already written in this package's own
+engine module; the triage sorted by efficiency and thresholded on raw score.
+
+**A shortlist of one molecule in four variations.** Five of fifteen entries shared
+one aminothiazine core with different N-substituents. The diversity threshold
+dropped from 0.85 to 0.7.
+
+**A candidate with nothing to bind with.** The top entry by synthetic accessibility
+was `N#Cc1cc(-c2cc(F)c(F)c(-c3ccc(F)cn3)c2)cc(Cl)c1F` — a polyfluorinated biaryl
+nitrile with no basic nitrogen, scoring -9.19 against an aspartyl protease whose
+inhibitors essentially all carry an amidine, guanidine or basic amine to engage
+the Asp32/Asp228 dyad. It fills the pocket and cannot do the chemistry, and a
+docking score cannot notice: scoring functions reward shape, not chemistry.
+
+**A feature check that could not tell what it was measuring.** The fix for the
+above measures which functional groups the known actives share and flags
+candidates carrying none. Its first version compared prevalence only, so
+`aromatic_ring` — in essentially every drug-like molecule — counted as conserved
+and the warheadless biaryl passed. Adding a background and requiring enrichment
+fixed that, and then exposed a deeper problem:
+
+```
+amidine                  90% of actives vs 48% of background  (1.9x)
+halogen_on_aromatic      93% vs 51%                           (1.8x)
+primary_aliphatic_amine  90% vs 47%                           (1.9x)
+```
+
+Three features indistinguishable. The background was weakly active BACE1
+compounds — and a weak BACE1 binder is still a BACE1-series compound carrying the
+same warhead. Filtering it to compounds below 0.4 Tanimoto from every active moved
+amidine prevalence from 50% to 48%: essentially nothing, because two molecules can
+share a small amidine and still sit below that threshold.
+
+**A target's own data contains no "does not bind" population.** Every compound in
+it was designed and tested against that target. So the check is now *withheld*
+when no feature reaches 3x enrichment, and the report says the survivors have not
+been checked for binding chemistry — a stated gap rather than a silent one. A
+background from unrelated targets is what it needs, which this pipeline does not
+yet fetch.
+
+This is the mirror of a trade-off recorded above for enrichment. Measured weak
+binders are the **right** control for docking enrichment, where shared chemistry
+makes the test harder and therefore honest, and the **wrong** one for identifying
+binding determinants, where shared chemistry erases the signal. Two correct
+answers from one dataset, depending on the question.
+
+**Withholding treated as failing.** When the check was withheld, every candidate
+came back `retains_strong = False` and the pipeline dropped all 17 survivors for
+failing a check already declared unusable. No verdict is not a failing verdict.
+
 ## What this pipeline cannot do
 
 Stated here so it does not have to be inferred:
@@ -310,6 +397,11 @@ Stated here so it does not have to be inferred:
   chemical space spanned by the input actives. It will not discover a novel
   chemotype, and for a target with few known actives the reachable space is
   correspondingly small.
+- **The conserved-feature check has no usable background.** It needs compounds
+  from unrelated targets; the pipeline only fetches the target's own data, in
+  which everything carries the target's warhead. Until that is addressed, the
+  check is withheld on most targets and shortlists go out unchecked for binding
+  chemistry.
 - **Cross-docking is not implemented.** Redocking puts a ligand back into the
   receptor conformation it induced, which is the easiest version of the problem.
   Whether a setup places a *different* ligand correctly is a harder question that
