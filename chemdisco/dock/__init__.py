@@ -12,6 +12,23 @@ preparation raises; a box centred on a crystallisation additive produces a full
 set of plausible poses for a site that binds nothing.
 """
 
+from .engine import (
+    VINA_ERROR_KCAL,
+    DockingError,
+    DockingResult,
+    Pose,
+    RedockValidation,
+    dock,
+    meeko_available,
+    nearest_neighbour_rmsd,
+    obabel_available,
+    prepare_ligand_pdbqt,
+    prepare_receptor_pdbqt,
+    redock_validation,
+    scores_are_distinguishable,
+    toolchain_report,
+    vina_available,
+)
 from .box import (
     Box,
     atoms_within,
@@ -37,6 +54,21 @@ from .pdb import (
 
 __all__ = [
     "MIN_LIGAND_HEAVY_ATOMS",
+    "VINA_ERROR_KCAL",
+    "DockingError",
+    "DockingResult",
+    "Pose",
+    "RedockValidation",
+    "dock",
+    "meeko_available",
+    "nearest_neighbour_rmsd",
+    "obabel_available",
+    "prepare_ligand_pdbqt",
+    "prepare_receptor_pdbqt",
+    "redock_validation",
+    "scores_are_distinguishable",
+    "toolchain_report",
+    "vina_available",
     "NON_LIGAND_RESIDUES",
     "Atom",
     "Box",
