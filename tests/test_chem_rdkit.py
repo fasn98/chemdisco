@@ -423,6 +423,52 @@ class TestGeneration(unittest.TestCase):
             )
         self.assertEqual(report.ranked(), [])
 
+    def test_policy_audit_passes_a_well_matched_policy(self) -> None:
+        from chemdisco.generate import audit_policy
+
+        audit = audit_policy(self.ACTIVES)
+        self.assertEqual(audit.n_actives, len(self.ACTIVES))
+        self.assertFalse(
+            audit.policy_is_suspect,
+            f"these small amides should survive the default policy: "
+            f"{audit.describe()}",
+        )
+
+    def test_policy_audit_flags_a_mis_calibrated_policy(self) -> None:
+        # The BACE1 case, in miniature. A size ceiling below the actives
+        # themselves rejects the chemistry the generator is supposed to explore,
+        # and the audit must say so rather than letting the attrition be read as
+        # a fact about the candidates.
+        from chemdisco.generate import GenerationPolicy, audit_policy
+
+        audit = audit_policy(self.ACTIVES, GenerationPolicy(max_heavy_atoms=5))
+        self.assertTrue(audit.policy_is_suspect)
+        self.assertEqual(audit.n_passing, 0)
+        self.assertIn("mis-calibrated", audit.describe())
+        self.assertTrue(audit.failing_examples)
+
+    def test_generation_report_carries_the_audit(self) -> None:
+        from chemdisco.generate import GenerationPolicy, generate_candidates
+
+        report = generate_candidates(
+            self.ACTIVES, policy=GenerationPolicy(max_generated=100), seed=5
+        )
+        self.assertIsNotNone(report.policy_audit)
+        self.assertIn("Policy audit", report.describe())
+
+    def test_empty_output_under_a_bad_policy_blames_the_policy(self) -> None:
+        from chemdisco.generate import GenerationPolicy, generate_candidates
+
+        report = generate_candidates(
+            self.ACTIVES,
+            policy=GenerationPolicy(max_generated=100, max_heavy_atoms=5),
+            seed=6,
+        )
+        self.assertEqual(report.candidates, [])
+        text = report.describe()
+        self.assertIn("wrong for this target class", text)
+        self.assertNotIn("Both are findings", text)
+
     def test_too_few_fragments_is_reported_as_a_finding(self) -> None:
         from chemdisco.generate import generate_candidates
 

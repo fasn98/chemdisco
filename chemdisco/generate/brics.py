@@ -174,6 +174,7 @@ class GenerationReport:
     n_fragments: int = 0
     n_generated: int = 0
     attrition: dict[str, int] = field(default_factory=dict)
+    policy_audit: "PolicyAudit | None" = None
     notes: list[str] = field(default_factory=list)
 
     def record(self, stage: str) -> None:
@@ -193,13 +194,28 @@ class GenerationReport:
                 lines.append(f"  {count:>6} by {stage}")
         lines.append(f"Retained: {len(self.candidates)} candidates.")
 
+        if self.policy_audit is not None:
+            lines.append("")
+            lines.append(self.policy_audit.describe())
+            lines.append("")
+
         if self.n_generated and not self.candidates:
-            lines.append(
-                "WARNING: every generated structure was filtered out. Either the "
-                "fragment set is too small to recombine usefully, or the filters "
-                "are stricter than this chemical space allows. Loosen them "
-                "deliberately rather than concluding no candidates exist."
-            )
+            if self.policy_audit is not None and self.policy_audit.policy_is_suspect:
+                lines.append(
+                    "WARNING: every generated structure was filtered out, and the "
+                    "audit above shows the same filters would reject most of the "
+                    "known actives. The policy is wrong for this target class, not "
+                    "the candidates. Fix it to fit the chemistry rather than "
+                    "loosening it until something survives."
+                )
+            else:
+                lines.append(
+                    "WARNING: every generated structure was filtered out, and the "
+                    "filters do accept the known actives -- so this is not a "
+                    "mis-calibrated policy. Either the fragment set is too small "
+                    "to recombine usefully, or recombination genuinely produces "
+                    "nothing viable here. Both are findings, not failures."
+                )
         elif self.n_generated and len(self.candidates) / self.n_generated < 0.01:
             lines.append(
                 f"NOTE: retention is "
@@ -318,6 +334,145 @@ def _build_products(
         return
 
 
+@dataclass(frozen=True, slots=True)
+class PolicyAudit:
+    """How the filter policy treats the *known actives* it was pointed at.
+
+    The question this answers: would this policy have rejected the compounds
+    that are already known to work?
+
+    It exists because the first live BACE1 run discarded all 1500 generated
+    structures -- 1000 of them on Brenk alerts -- and the obvious response, to
+    loosen the filters until something survives, is the wrong one. It tunes the
+    policy until it produces output rather than until it is correct.
+
+    The right question is measurable. BACE1 inhibitors are large peptidomimetics
+    carrying amidine and guanidine groups, and the Brenk set flags exactly those.
+    Brenk was assembled to triage HTS decks for lead-likeness; applied to a target
+    class whose genuine actives contain those motifs, it rejects the right
+    chemistry. If most known actives fail the policy, the policy is wrong for this
+    target -- and that is a fact about the filter, not an opinion about the
+    candidates.
+
+    Attributes:
+        n_actives: How many input structures were audited.
+        n_passing: How many would survive the policy.
+        rejections: Reason counts, in the same vocabulary as generation attrition.
+        failing_examples: A few rejected actives with their reasons.
+    """
+
+    n_actives: int
+    n_passing: int
+    rejections: dict[str, int]
+    failing_examples: tuple[tuple[str, str], ...] = ()
+
+    @property
+    def pass_rate(self) -> float | None:
+        if self.n_actives == 0:
+            return None
+        return self.n_passing / self.n_actives
+
+    @property
+    def policy_is_suspect(self) -> bool:
+        """Whether the policy rejects so many known actives as to be unusable here.
+
+        Half is the threshold: a policy that would discard most of the compounds
+        already proven to hit this target cannot sensibly referee proposals for it.
+        """
+        rate = self.pass_rate
+        return rate is not None and rate < 0.5
+
+    def describe(self) -> str:
+        if self.n_actives == 0:
+            return "no actives audited"
+        rate = self.pass_rate or 0.0
+        lines = [
+            f"Policy audit: {self.n_passing} of {self.n_actives} known actives "
+            f"({rate:.0%}) would survive these filters."
+        ]
+        for rule, count in sorted(self.rejections.items(), key=lambda kv: -kv[1]):
+            lines.append(f"  {count:>4} known active(s) rejected by {rule}")
+        if self.policy_is_suspect:
+            lines.append(
+                "  WARNING: this policy rejects most of the compounds already "
+                "known to hit this target. It is mis-calibrated for this "
+                "chemistry, so the generation attrition above says more about the "
+                "filters than about the candidates. Fix the policy to fit the "
+                "target class -- do not loosen it until something survives."
+            )
+            for smiles, reason in self.failing_examples:
+                lines.append(f"    {smiles[:70]} -> {reason}")
+        return "\n".join(lines)
+
+
+def audit_policy(
+    known_actives: Sequence[str], policy: GenerationPolicy | None = None
+) -> PolicyAudit:
+    """Run the generation filters over the known actives themselves.
+
+    Novelty is excluded from the audit: a known active is by definition already
+    known, so testing it against the novelty filter would reject every one of them
+    and tell you nothing. Everything else -- size, alerts, synthetic accessibility
+    -- applies unchanged.
+    """
+    require_rdkit()
+    policy = policy or GenerationPolicy()
+
+    passing = 0
+    rejections: dict[str, int] = {}
+    failures: list[tuple[str, str]] = []
+
+    def reject(smiles: str, rule: str) -> None:
+        rejections[rule] = rejections.get(rule, 0) + 1
+        if len(failures) < 5:
+            failures.append((smiles, rule))
+
+    for smiles in known_actives:
+        result = standardize(smiles)
+        if not result.ok or result.smiles is None:
+            reject(smiles, "failed standardisation")
+            continue
+
+        mol = Chem.MolFromSmiles(result.smiles)
+        if mol is None:
+            reject(smiles, "failed standardisation")
+            continue
+
+        heavy = mol.GetNumHeavyAtoms()
+        if heavy < policy.min_heavy_atoms:
+            reject(result.smiles, f"too small (under {policy.min_heavy_atoms} heavy atoms)")
+            continue
+        if heavy > policy.max_heavy_atoms:
+            reject(result.smiles, f"too large (over {policy.max_heavy_atoms} heavy atoms)")
+            continue
+
+        alerts = screen_alerts(result.smiles)
+        if policy.reject_pains and alerts.pains:
+            reject(result.smiles, "PAINS alert")
+            continue
+        if policy.reject_brenk and alerts.brenk:
+            reject(result.smiles, "Brenk alert")
+            continue
+
+        sascore = synthetic_accessibility(result.smiles)
+        if (
+            policy.max_sascore is not None
+            and sascore.is_known
+            and sascore.require() > policy.max_sascore
+        ):
+            reject(result.smiles, f"synthetic accessibility above {policy.max_sascore}")
+            continue
+
+        passing += 1
+
+    return PolicyAudit(
+        n_actives=len(known_actives),
+        n_passing=passing,
+        rejections=rejections,
+        failing_examples=tuple(failures),
+    )
+
+
 def generate_candidates(
     known_actives: Sequence[str],
     *,
@@ -348,6 +503,10 @@ def generate_candidates(
     )
 
     report = GenerationReport(n_input_actives=len(known_actives))
+    # Audited before anything is generated: attrition figures are not
+    # interpretable without knowing whether the policy accepts the chemistry it
+    # is being pointed at.
+    report.policy_audit = audit_policy(known_actives, policy)
 
     fragments, decomposition_errors = decompose_to_fragments(known_actives)
     report.n_fragments = len(fragments)
