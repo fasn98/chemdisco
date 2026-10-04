@@ -417,10 +417,17 @@ def generate_candidates(
             continue
 
         sascore = synthetic_accessibility(result.smiles)
-        if policy.max_sascore is not None and sascore.is_known:
-            if sascore.require() > policy.max_sascore:
-                report.record(f"synthetic accessibility above {policy.max_sascore}")
-                continue
+        # A candidate whose SAscore could not be computed is kept, not dropped.
+        # Rejecting on an unavailable value would silently discard the whole
+        # library whenever RDKit's SA_Score contrib module is missing, and an
+        # absent score is not evidence of a hard synthesis.
+        if (
+            policy.max_sascore is not None
+            and sascore.is_known
+            and sascore.require() > policy.max_sascore
+        ):
+            report.record(f"synthetic accessibility above {policy.max_sascore}")
+            continue
 
         survivors.append(
             Candidate(

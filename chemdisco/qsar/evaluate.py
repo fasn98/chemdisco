@@ -90,7 +90,7 @@ class Interval:
             f"[{self.low:.{digits}f}, {self.high:.{digits}f}]"
         )
 
-    def overlaps(self, other: "Interval") -> bool:
+    def overlaps(self, other: Interval) -> bool:
         """Whether two intervals overlap.
 
         Overlapping intervals mean the difference between the two numbers is not
@@ -221,6 +221,12 @@ class Evaluation:
         worthless, but it should not be the headline claim in a report or the
         basis for ranking synthesis candidates.
         """
+        # Written as a sequence of guard clauses on purpose. Each one is a
+        # separate, nameable reason a result is not reportable, and keeping them
+        # parallel is what makes the bar auditable at a glance. Ruff's SIM103
+        # suggests collapsing the final clause into `return not (...)`, which
+        # would make the last check read differently from the five above it for
+        # no gain; hence the targeted suppression rather than a rewrite.
         if self.leakage_warnings:
             return False
         if self.n_test < 30:
@@ -234,7 +240,7 @@ class Evaluation:
             and self.r2.estimate <= self.baselines.permutation_r2_p95
         ):
             return False
-        if (
+        if (  # noqa: SIM103
             self.baselines.nearest_neighbour_r2 is not None
             and self.r2.estimate <= self.baselines.nearest_neighbour_r2
         ):

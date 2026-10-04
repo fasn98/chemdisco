@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import math
 import unittest
+from dataclasses import FrozenInstanceError
 
 from chemdisco.provenance import Origin, ProvenanceError, Quantity, weakest
 
@@ -59,9 +60,8 @@ class TestQuantityConstruction(unittest.TestCase):
         # NaN propagates silently through arithmetic and comparisons, so it is
         # a worse representation of "unknown" than None.
         for bad in (float("nan"), float("inf"), float("-inf")):
-            with self.subTest(bad=bad):
-                with self.assertRaises(ProvenanceError):
-                    Quantity.heuristic(bad, None, "rule")
+            with self.subTest(bad=bad), self.assertRaises(ProvenanceError):
+                Quantity.heuristic(bad, None, "rule")
 
     def test_booleans_are_not_numbers(self) -> None:
         with self.assertRaises(ProvenanceError):
@@ -95,8 +95,11 @@ class TestQuantityConstruction(unittest.TestCase):
         self.assertFalse(q.in_domain)
 
     def test_quantity_is_immutable(self) -> None:
+        # FrozenInstanceError specifically, rather than a blind Exception: the
+        # point is that the dataclass is frozen, and a bare `except Exception`
+        # would also pass if the attribute name were simply misspelled.
         q = Quantity.heuristic(1.0, None, "rule")
-        with self.assertRaises(Exception):
+        with self.assertRaises(FrozenInstanceError):
             q.value = 2.0  # type: ignore[misc]
 
 

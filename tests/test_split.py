@@ -159,9 +159,8 @@ class TestScaffoldSplit(unittest.TestCase):
     def test_invalid_fractions_refuse(self) -> None:
         scaffolds = series_dataset()
         for bad in (0.0, 1.0, -0.1, 1.5):
-            with self.subTest(fraction=bad):
-                with self.assertRaises(SplitError):
-                    scaffold_split(scaffolds, test_fraction=bad)
+            with self.subTest(fraction=bad), self.assertRaises(SplitError):
+                scaffold_split(scaffolds, test_fraction=bad)
 
     def test_fractions_summing_past_one_refuse(self) -> None:
         with self.assertRaises(SplitError):

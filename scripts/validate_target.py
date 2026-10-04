@@ -297,7 +297,11 @@ def main() -> int:
     # -- 7. Generation -----------------------------------------------------
     if not args.skip_generation:
         heading("7. Generating candidates from the most potent known actives")
-        from chemdisco.generate import GenerationPolicy, generate_candidates, score_candidates
+        from chemdisco.generate import (
+            GenerationPolicy,
+            generate_candidates,
+            score_candidates,
+        )
 
         train_idx = list(split.train)
         order = np.argsort(y[train_idx])[::-1]

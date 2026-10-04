@@ -15,11 +15,6 @@ import numpy as np
 
 from chemdisco.curate.records import CuratedPoint
 from chemdisco.provenance import Origin, Quantity
-from chemdisco.qsar.dataset import (
-    LabelProvenanceError,
-    build_training_set,
-    verify_label_provenance,
-)
 from chemdisco.qsar import (
     ApplicabilityDomain,
     QSARModel,
@@ -32,6 +27,11 @@ from chemdisco.qsar import (
     r_squared,
     rmse,
     spearman,
+)
+from chemdisco.qsar.dataset import (
+    LabelProvenanceError,
+    build_training_set,
+    verify_label_provenance,
 )
 
 

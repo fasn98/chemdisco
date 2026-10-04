@@ -11,10 +11,10 @@ from __future__ import annotations
 import unittest
 
 from chemdisco.curate import (
+    PERMISSIVE_POLICY,
     ActivityRecord,
     AggregationPolicy,
     CurationPolicy,
-    PERMISSIVE_POLICY,
     aggregate_measurements,
     curate,
     family_of,
