@@ -18,6 +18,12 @@ cache/
 *.json.gz
 !tests/fixtures/**/*.json.gz
 
-# Trained models and run outputs.
+# Trained models.
 *.joblib
-runs/
+
+# Run outputs. The logs and JSON under runs/ ARE the record on a local machine --
+# where an Actions run had an immutable run id attached to the commit, here the
+# terminal is the only witness -- so they are committed deliberately. Poses and
+# other bulk artefacts are not.
+runs/**/*.pdbqt
+runs/**/*.sdf

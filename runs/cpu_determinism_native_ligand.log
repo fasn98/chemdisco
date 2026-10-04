@@ -1,0 +1,139 @@
+Docking toolchain:
+  vina: present
+  meeko: present
+  obabel: present
+
+This machine reports 6 CPU(s).
+
+Box: Box centred at (25.50, 10.84, 21.88), size 26.3 x 21.1 x 22.1 A (12322 A^3)
+  derived from: co-crystallised ligand 0V6_A_501
+  evidence: 25 heavy atoms of 0V6 observed bound in the crystal structure
+Receptor: 6050 atoms, prepared with openbabel
+
+Docking c1(sc(cc1Cl)c1cc(cnc1)C#CC)[C@@]1(CC(=O)N(C(=N1)N)C)C at exhaustiveness 8, seed 42, 3 repeat(s) per thread count.
+  cpu=1  repeat=0: -8.4310 kcal/mol (9 poses)
+  cpu=1  repeat=1: -8.4310 kcal/mol (9 poses)
+  cpu=1  repeat=2: -8.4310 kcal/mol (9 poses)
+  cpu=2  repeat=0: -8.4310 kcal/mol (9 poses)
+  cpu=2  repeat=1: -8.4310 kcal/mol (9 poses)
+  cpu=2  repeat=2: -8.4310 kcal/mol (9 poses)
+  cpu=3  repeat=0: -8.4310 kcal/mol (9 poses)
+  cpu=3  repeat=1: -8.4310 kcal/mol (9 poses)
+  cpu=3  repeat=2: -8.4310 kcal/mol (9 poses)
+  cpu=4  repeat=0: -8.4310 kcal/mol (9 poses)
+  cpu=4  repeat=1: -8.4310 kcal/mol (9 poses)
+  cpu=4  repeat=2: -8.4310 kcal/mol (9 poses)
+  cpu=6  repeat=0: -8.4310 kcal/mol (9 poses)
+  cpu=6  repeat=1: -8.4310 kcal/mol (9 poses)
+  cpu=6  repeat=2: -8.4310 kcal/mol (9 poses)
+  cpu=0  repeat=0: -8.4310 kcal/mol (9 poses)
+  cpu=0  repeat=1: -8.4310 kcal/mol (9 poses)
+  cpu=0  repeat=2: -8.4310 kcal/mol (9 poses)
+
+=== Verdict ===
+  spread across all runs:      0.0000 kcal/mol
+  spread at a fixed cpu count: 0.0000 kcal/mol
+
+  REPRODUCIBLE. The score does not depend on the thread count, so numbers from a 2-core runner and a many-core workstation are comparable and `cpu` needs no pinning.
+
+=== JSON ===
+{
+  "cpu_count_reported": 6,
+  "exhaustiveness": 8,
+  "seed": 42,
+  "observations": [
+    {
+      "cpu": 1,
+      "repeat": 0,
+      "score": -8.431
+    },
+    {
+      "cpu": 1,
+      "repeat": 1,
+      "score": -8.431
+    },
+    {
+      "cpu": 1,
+      "repeat": 2,
+      "score": -8.431
+    },
+    {
+      "cpu": 2,
+      "repeat": 0,
+      "score": -8.431
+    },
+    {
+      "cpu": 2,
+      "repeat": 1,
+      "score": -8.431
+    },
+    {
+      "cpu": 2,
+      "repeat": 2,
+      "score": -8.431
+    },
+    {
+      "cpu": 3,
+      "repeat": 0,
+      "score": -8.431
+    },
+    {
+      "cpu": 3,
+      "repeat": 1,
+      "score": -8.431
+    },
+    {
+      "cpu": 3,
+      "repeat": 2,
+      "score": -8.431
+    },
+    {
+      "cpu": 4,
+      "repeat": 0,
+      "score": -8.431
+    },
+    {
+      "cpu": 4,
+      "repeat": 1,
+      "score": -8.431
+    },
+    {
+      "cpu": 4,
+      "repeat": 2,
+      "score": -8.431
+    },
+    {
+      "cpu": 6,
+      "repeat": 0,
+      "score": -8.431
+    },
+    {
+      "cpu": 6,
+      "repeat": 1,
+      "score": -8.431
+    },
+    {
+      "cpu": 6,
+      "repeat": 2,
+      "score": -8.431
+    },
+    {
+      "cpu": 0,
+      "repeat": 0,
+      "score": -8.431
+    },
+    {
+      "cpu": 0,
+      "repeat": 1,
+      "score": -8.431
+    },
+    {
+      "cpu": 0,
+      "repeat": 2,
+      "score": -8.431
+    }
+  ],
+  "spread_kcal": 0.0,
+  "spread_within_fixed_cpu_kcal": 0.0,
+  "thread_dependent": false
+}
