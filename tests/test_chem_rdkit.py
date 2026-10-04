@@ -522,6 +522,24 @@ class TestConservedFeatures(unittest.TestCase):
         "N=C(N)c3c(F)cc(F)cc32)cn(-c2ccc(F)c(Cl)c2)c1=O"
     )
 
+    #: A background of ordinary aromatic, halogenated, drug-like molecules with
+    #: no amidine. This is what separates a discriminating feature from a merely
+    #: prevalent one: these all have aromatic rings and aromatic halogens too.
+    BACKGROUND = [
+        "Clc1ccccc1-c1ccccc1",
+        "Fc1ccc(-c2ccccc2)cc1",
+        "N#Cc1ccc(Cl)cc1",
+        "Clc1cc(F)ccc1-c1ccncc1",
+        "Fc1cccc(-c2cc(F)ccc2Cl)c1",
+        "O=C(Nc1ccccc1)c1ccc(Cl)cc1",
+        "COc1ccc(-c2ccc(F)cc2)cc1",
+        "Clc1ccc(Oc2ccccc2)cc1",
+        "Fc1ccc(Sc2ccccc2)cc1",
+        "N#Cc1cccc(-c2ccc(F)cc2)c1",
+        "Clc1ccc(C=Cc2ccccc2)cc1",
+        "Fc1ccc(-c2nccs2)cc1",
+    ]
+
     def _actives(self) -> list[str]:
         # An active set sharing a basic/amidine motif, as a BACE1 set does.
         return [self.WITH_AMIDINE, self.AMINOTHIAZINE] * 6
@@ -546,23 +564,68 @@ class TestConservedFeatures(unittest.TestCase):
     def test_profiling_finds_what_the_actives_share(self) -> None:
         from chemdisco.generate import profile_actives
 
-        profile = profile_actives(self._actives())
+        profile = profile_actives(
+            self._actives(), background_smiles=self.BACKGROUND
+        )
         self.assertTrue(profile.is_informative)
         self.assertIn("amidine", profile.conserved)
+
+    def test_a_ubiquitous_feature_is_not_treated_as_discriminating(self) -> None:
+        # The design error the first version made: aromatic_ring is in 100% of
+        # the actives and in essentially every drug-like molecule, so its
+        # presence in a candidate says nothing about binding.
+        from chemdisco.generate import profile_actives
+
+        profile = profile_actives(
+            self._actives(), background_smiles=self.BACKGROUND
+        )
+        self.assertIn("aromatic_ring", profile.prevalence)
+        self.assertAlmostEqual(profile.prevalence["aromatic_ring"], 1.0)
+        self.assertNotIn("aromatic_ring", profile.conserved)
+        self.assertIn("aromatic_ring", profile.ubiquitous)
+        self.assertIn("not discriminating", profile.describe())
+
+    def test_without_a_background_the_weakness_is_disclosed(self) -> None:
+        from chemdisco.generate import profile_actives
+
+        profile = profile_actives(self._actives())
+        self.assertIn("aromatic_ring", profile.conserved)
+        self.assertIn("no background set was supplied", profile.describe())
+
+    def test_enrichment_is_reported_per_feature(self) -> None:
+        from chemdisco.generate import profile_actives
+
+        profile = profile_actives(
+            self._actives(), background_smiles=self.BACKGROUND
+        )
+        # Amidine is absent from the background entirely.
+        self.assertEqual(profile.enrichment("amidine"), float("inf"))
+        # Aromatic rings are everywhere, so the ratio is about one.
+        ratio = profile.enrichment("aromatic_ring")
+        self.assertIsNotNone(ratio)
+        assert ratio is not None
+        self.assertLess(ratio, 1.5)
 
     def test_the_real_false_positive_is_flagged(self) -> None:
         from chemdisco.generate import check_candidate, profile_actives
 
-        profile = profile_actives(self._actives())
+        profile = profile_actives(
+            self._actives(), background_smiles=self.BACKGROUND
+        )
         verdict = check_candidate(self.WARHEADLESS, profile)
-        self.assertFalse(verdict.retains_any)
+        self.assertFalse(
+            verdict.retains_any,
+            "a warheadless biaryl must not pass by retaining an aromatic ring",
+        )
         self.assertIn("amidine", verdict.missing)
         self.assertIn("cannot engage the target", verdict.describe())
 
     def test_a_candidate_keeping_the_motif_passes(self) -> None:
         from chemdisco.generate import check_candidate, profile_actives
 
-        profile = profile_actives(self._actives())
+        profile = profile_actives(
+            self._actives(), background_smiles=self.BACKGROUND
+        )
         verdict = check_candidate(self.AMINOTHIAZINE, profile)
         self.assertTrue(verdict.retains_any)
         self.assertIn("amidine", verdict.present)
@@ -573,7 +636,7 @@ class TestConservedFeatures(unittest.TestCase):
         from chemdisco.generate import check_candidate, profile_actives
 
         acids = ["CC(=O)O", "CCC(=O)O", "c1ccccc1C(=O)O"] * 4
-        profile = profile_actives(acids)
+        profile = profile_actives(acids, background_smiles=self.BACKGROUND)
         self.assertIn("carboxylic_acid", profile.conserved)
         self.assertNotIn("amidine", profile.conserved)
         self.assertFalse(check_candidate("c1ccccc1", profile).retains_any)
@@ -602,6 +665,7 @@ class TestConservedFeatures(unittest.TestCase):
         result = screen_candidates(
             [self.WARHEADLESS, self.WITH_AMIDINE, self.AMINOTHIAZINE],
             self._actives(),
+            background_smiles=self.BACKGROUND,
         )
         self.assertEqual(result.n_flagged, 1)
         self.assertEqual(result.n_retaining, 2)

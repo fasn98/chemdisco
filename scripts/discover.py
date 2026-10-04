@@ -195,6 +195,11 @@ def build_inputs(args) -> dict | None:
             c.novelty.max_similarity if c.novelty else None for c in candidates
         ],
         "reference_feature_smiles": [p.smiles for p in reference],
+        "background_smiles": [
+            p.smiles
+            for p in points
+            if p.pactivity.require() <= args.background_threshold
+        ][:400],
         "n_fragments": generation.n_fragments,
         "n_generated": generation.n_generated,
         "policy_audit_pass_rate": (
@@ -411,6 +416,15 @@ def main() -> int:
     parser.add_argument("--name", default="BACE1")
     parser.add_argument("--pdb", default="4FRS")
     parser.add_argument("--active-threshold", type=float, default=8.0)
+    parser.add_argument(
+        "--background-threshold",
+        type=float,
+        default=6.0,
+        help=(
+            "Maximum pActivity for a compound to serve as feature-profile "
+            "background. Weak measured binders, not presumed inactives"
+        ),
+    )
     parser.add_argument("--n-reference", type=int, default=30)
     parser.add_argument("--n-seed", type=int, default=50)
     parser.add_argument("--n-candidates", type=int, default=60)
@@ -478,8 +492,13 @@ def main() -> int:
     # assumed. BRICS can detach the group that does the binding and leave a
     # well-shaped molecule a docking score cannot fault.
     heading("3b. Profiling the conserved features of the known actives")
+    # The background is the weakly active end of the same curated set: real
+    # measured compounds against this target, which is what distinguishes a
+    # feature that marks binding from one that marks being a drug-like molecule.
     feature_screen = screen_candidates(
-        inputs["candidate_smiles"], inputs["reference_feature_smiles"]
+        inputs["candidate_smiles"],
+        inputs["reference_feature_smiles"],
+        background_smiles=inputs["background_smiles"],
     )
     print(feature_screen.describe())
     feature_by_smiles = {
