@@ -964,3 +964,50 @@ class TestFailureDiagnostics(unittest.TestCase):
             results=[DockingResult("CCO", error="")], receptor_id="4FRS"
         ).failure_details()
         self.assertEqual(details, [("CCO", "unknown")])
+
+
+class TestEnrichmentRecordsItsThreadCount(unittest.TestCase):
+    """A score that does not say how many threads produced it cannot be compared.
+
+    `validate_enrichment.py` had `--exhaustiveness` and `--time-budget` but no
+    `--cpu`, so `CPU=6` in the environment never reached it and an enrichment
+    result recorded no thread count. Harmless while the CPU probe's REPRODUCIBLE
+    verdict holds, a provenance gap the moment it does not.
+    """
+
+    def _parser_options(self) -> set[str]:
+        import pathlib
+        import re
+
+        source = (
+            pathlib.Path(__file__).resolve().parent.parent
+            / "scripts"
+            / "validate_enrichment.py"
+        ).read_text()
+        return set(re.findall(r'add_argument\(\s*"(--[a-z-]+)"', source))
+
+    def test_the_script_accepts_a_cpu_argument(self) -> None:
+        self.assertIn("--cpu", self._parser_options())
+
+    def test_the_thread_count_reaches_the_docking_call(self) -> None:
+        # Accepting the flag and not passing it on would be worse than not having
+        # it: the run would claim a thread count it did not use.
+        import pathlib
+
+        source = (
+            pathlib.Path(__file__).resolve().parent.parent
+            / "scripts"
+            / "validate_enrichment.py"
+        ).read_text()
+        self.assertIn("cpu=args.cpu", source)
+
+    def test_the_runner_passes_the_cpu_environment_variable_through(self) -> None:
+        import pathlib
+
+        script = (
+            pathlib.Path(__file__).resolve().parent.parent
+            / "scripts"
+            / "run_local.sh"
+        ).read_text()
+        enrichment = script.split("enrichment)")[1].split(";;")[0]
+        self.assertIn('--cpu "$CPU"', enrichment)

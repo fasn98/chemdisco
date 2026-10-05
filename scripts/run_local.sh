@@ -111,6 +111,7 @@ case "${1:-}" in
     # No sharding: one process, one ligand list, nothing to pool.
     python scripts/validate_enrichment.py \
       --exhaustiveness "$EXHAUSTIVENESS" \
+      --cpu "$CPU" \
       --time-budget "$TIME_BUDGET" 2>&1 | tee runs/enrichment.log
     ;;
 

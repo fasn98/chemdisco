@@ -41,6 +41,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import pathlib
 import sys
 import time
@@ -233,6 +234,19 @@ def main() -> int:
     parser.add_argument("--n-actives", type=int, default=20)
     parser.add_argument("--decoys-per-active", type=int, default=3)
     parser.add_argument("--exhaustiveness", type=int, default=8)
+    parser.add_argument(
+        "--cpu",
+        type=int,
+        default=0,
+        help=(
+            "Vina thread count. 0 lets Vina use what it finds, matching the rest "
+            "of this project. An enrichment result that does not record the "
+            "thread count it was produced under cannot be compared with one that "
+            "does -- which mattered here, because every figure in the README came "
+            "from a 2-core runner at cpu=0 and this script had no way to say so. "
+            "scripts/probe_cpu_determinism.py measures whether it changes a score"
+        ),
+    )
     parser.add_argument(
         "--time-budget",
         type=float,
@@ -448,7 +462,13 @@ def main() -> int:
         )
     print(
         f"  {len(ligands)} ligands at exhaustiveness {args.exhaustiveness}, "
-        f"interleaved, budget {args.time_budget:.0f}s"
+        f"cpu={args.cpu}"
+        + (
+            f" (= {os.cpu_count()} on this machine)"
+            if args.cpu == 0
+            else ""
+        )
+        + f", interleaved, budget {args.time_budget:.0f}s"
     )
 
     def progress(done: int, total: int, _result) -> None:
@@ -464,6 +484,7 @@ def main() -> int:
         progress=progress,
         exhaustiveness=args.exhaustiveness,
         n_poses=3,
+        cpu=args.cpu,
         time_budget_seconds=args.time_budget,
     )
     print("\n" + screen_result.describe())
@@ -484,6 +505,12 @@ def main() -> int:
                     "receptor_id": args.pdb.upper(),
                     "box_signature": f"{box.center}|{box.size}",
                     "gap_warning": gap_warning,
+                    "exhaustiveness": args.exhaustiveness,
+                    # Both: the request and what it resolved to. `cpu=0` records
+                    # only an intention, and "whatever the machine had" is not a
+                    # value a later comparison can use.
+                    "cpu": args.cpu,
+                    "cpu_effective": args.cpu or os.cpu_count(),
                     "n_requested": len(ligands),
                     "elapsed_seconds": screen_result.elapsed_seconds,
                 },
