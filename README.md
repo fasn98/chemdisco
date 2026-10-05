@@ -290,6 +290,21 @@ contamination from untested binders, but they often share the actives' chemotype
 Enrichment here reads lower than a published DUD-E figure for the same target,
 which is the honest direction for the bias to run.
 
+**Reproduced on a second machine, at twice the search effort.** The figures above
+were measured on a 2-core runner at exhaustiveness 4. Re-run on a 6-core box at
+exhaustiveness 8, across all 54 ligands, the screen gives AUC-ROC
+**0.806 [0.681, 0.921]** — which *agrees* rather than diverges: 0.731 sits inside
+the new interval and 0.806 inside the old, and EF 1% reproduces at exactly 0.00. So
+doubling the search effort left enrichment statistically indistinguishable. That is
+the verdict redocking reached when 16→64 exhaustiveness did not move the pose
+ranking, and the one the triage reached when no survivor cleared the threshold by
+more than the scoring error. Three independent routes, one conclusion: on this
+target the limit is the scoring function, not the sampling — the score tells you
+whether a molecule fits the pocket, not how tightly it binds. (A caveat the run
+carries with it: one decoy failed with a `TypeError`, and attrition was unequal —
+0.0% of actives against 2.9% of decoys — which runs in the flattering direction,
+so it belongs next to the number.)
+
 **Three method errors this experiment produced,** recorded because each returned
 a believable wrong answer:
 
