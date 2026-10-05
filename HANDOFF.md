@@ -59,6 +59,56 @@ its numbers quietly depended on the machine is precisely the failure that cost t
 previous session most of a day (see "Generation was never reproducible" in the
 README).
 
+## How to work in this repository
+
+### Detach anything long, and commit each result as it lands
+
+**Anything expected to take more than ~10 minutes runs under `setsid`/`nohup` or
+`tmux`. Commit each result the moment its file closes — not at the end of the
+block of work.**
+
+Not a style preference. This repository has lost work to session teardowns three
+times, and the pattern was identical every time:
+
+- `discover` was killed at 30 of 90 ligands having written no shard. Forty minutes
+  of docking, with nothing to show it had run.
+- Source edits to `scripts/discover.py` were lost mid-change, because they were
+  being held for one tidy commit at the end.
+- A watcher waiting to report a run's completion died with its session while the
+  run itself, launched under `setsid`, carried on for another hour.
+
+What survived every time was exactly what had been detached and what had been
+committed. The 101-minute `discover` run that produced the current `runs/` went
+straight through a session ending and finished normally.
+
+Concretely:
+
+```bash
+setsid nohup bash -c 'EXHAUSTIVENESS=8 CPU=6 ./scripts/run_local.sh discover' \
+  >> runs/discover.console.log 2>&1 < /dev/null &
+```
+
+Which things here cross the threshold: `discover` (~100 min), `control` (~100 min),
+`enrichment` (~65 min at the raised time budget), and the full `tests` run (~6 min
+for both passes, so borderline). `cpu-probe` and `redock` do not.
+
+Two reasons the commit has to be *immediate* rather than at the end:
+
+1. **A local, unpushed commit is already enough.** The work survives in `.git`
+   even if nothing reaches the remote, so there is never a reason to hold an edit.
+2. **"When its file closes" is not "when the work block finishes."** Those are
+   different moments, and conflating them is how a truncated measurement gets into
+   the record looking finished. That has already happened here: an `enrichment`
+   screen stopped early on its default time budget at 16 of 54 ligands and
+   reported an `INCONCLUSIVE` 8-vs-8 AUC of 0.641 — a number that looked like a
+   measurement of enrichment and was a measurement of the time budget. It is kept
+   as `runs/enrichment_truncated_1500s.log`, under a name that says what it is.
+
+So: if a run is still writing, leave it out of the commit and say so explicitly.
+A partial artefact is not a result, and `runs/` is the only record this machine
+has — a GitHub Actions run had an immutable id attached to the commit, and here
+the log is it.
+
 ## Pending work
 
 ### 1. The shortlist from run 37233542592 — DONE
