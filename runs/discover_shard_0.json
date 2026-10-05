@@ -913,7 +913,7 @@
   "cpu": 6,
   "curation_signature": "da70584f5064c941",
   "n_requested": 90,
-  "elapsed_seconds": 5776.361786431001,
+  "elapsed_seconds": 6245.993351505007,
   "feature_profile": {
     "conserved": [
       "amidine",
@@ -1001,6 +1001,7 @@
   "anchor_motifs": [
     "amidine"
   ],
+  "anchor_constraint_applied": true,
   "n_anchor_fragments": 26,
   "n_plain_fragments": 55,
   "n_anchor_escapes": 0,
