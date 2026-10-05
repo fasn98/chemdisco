@@ -32,4 +32,4 @@ runs/**/*.sdf
 # log beside them. The tee'd log is the record; this is the plumbing.
 runs/*_driver.log
 runs/*_queue.status
-runs/enrichment.console.log
+runs/*.console.log
