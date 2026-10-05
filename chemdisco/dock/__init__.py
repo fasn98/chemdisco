@@ -76,6 +76,7 @@ from .screen import (
     interleave_by_label,
     screen,
     shard_by_label,
+    TriageOutcome,
     triage_candidates,
 )
 
@@ -99,6 +100,7 @@ __all__ = [
     "screen",
     "select_decoys",
     "shard_by_label",
+    "TriageOutcome",
     "triage_candidates",
     "MIN_LIGAND_HEAVY_ATOMS",
     "VINA_ERROR_KCAL",

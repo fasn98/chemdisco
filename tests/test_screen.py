@@ -415,35 +415,129 @@ class TestTriage(unittest.TestCase):
             receptor_id="4FRS",
         )
 
+    def _separated_candidates(self):
+        """A pool whose best candidate clears the threshold by MORE than the error.
+
+        The reference median below is -8.25 and Vina's error is 2.5, so beating
+        the threshold distinguishably means scoring below -10.75. The fixture in
+        ``_candidates`` tops out at -10.0 and therefore does not, which is what
+        makes it the withholding case.
+        """
+        from chemdisco.dock import DockingResult, Pose, ScreenResult
+
+        return ScreenResult(
+            results=[
+                DockingResult("strong", [Pose(1, -12.0)]),
+                DockingResult("borderline", [Pose(1, -8.0)]),
+                DockingResult("poor", [Pose(1, -4.0)]),
+                DockingResult("failed", error="preparation failed"),
+            ],
+            receptor_id="4FRS",
+        )
+
     def test_candidates_below_the_reference_median_are_kept(self) -> None:
         from chemdisco.dock import triage_candidates
 
-        kept, _ = triage_candidates(self._candidates(), [-9.0, -8.5, -8.0, -7.5])
-        # The reference median is -8.25; only the -10.0 candidate beats it.
-        self.assertEqual(kept, [0])
+        outcome = triage_candidates(
+            self._separated_candidates(), [-9.0, -8.5, -8.0, -7.5]
+        )
+        # The reference median is -8.25; only the -12.0 candidate beats it, and it
+        # beats it by 3.75 kcal/mol, so the filter is entitled to act.
+        self.assertTrue(outcome.discriminated)
+        self.assertEqual(outcome.kept, [0])
 
     def test_a_permissive_percentile_keeps_more(self) -> None:
         from chemdisco.dock import triage_candidates
 
-        kept, _ = triage_candidates(
-            self._candidates(), [-9.0, -8.5, -8.0, -7.5], percentile=90.0
+        outcome = triage_candidates(
+            self._separated_candidates(), [-9.0, -8.5, -8.0, -7.5], percentile=90.0
         )
-        self.assertIn(1, kept)
+        self.assertIn(1, outcome.kept)
 
     def test_failed_candidates_are_never_kept(self) -> None:
         from chemdisco.dock import triage_candidates
 
-        kept, _ = triage_candidates(self._candidates(), [-9.0, -8.0], percentile=99.0)
-        self.assertNotIn(3, kept)
+        # True on both branches: a candidate that did not dock was never assessed,
+        # so a withheld triage does not report it either.
+        outcome = triage_candidates(
+            self._candidates(), [-9.0, -8.0], percentile=99.0
+        )
+        self.assertNotIn(3, outcome.kept)
 
     def test_the_explanation_refuses_to_call_it_a_ranking(self) -> None:
         # The measured result this encodes: docking does not order candidates
         # reliably on this target, so the survivors' order carries nothing.
         from chemdisco.dock import triage_candidates
 
-        _, explanation = triage_candidates(self._candidates(), [-9.0, -8.0])
-        self.assertIn("filter, not a ranking", explanation)
-        self.assertIn("order carries no information", explanation)
+        outcome = triage_candidates(self._separated_candidates(), [-9.0, -8.0])
+        self.assertIn("filter, not a ranking", outcome.explanation)
+        self.assertIn("order carries no information", outcome.explanation)
+
+    # -- Withholding, when the threshold cannot discriminate at Vina's precision --
+    #
+    # Measured on BACE1: none of the 22 candidates clearing the reference median
+    # did so by more than the 2.5 kcal/mol method error, and the unconstrained
+    # control gave the same answer. A "passing" subset under those conditions
+    # reports as a filter something that does not filter.
+
+    def test_a_pool_inside_the_method_error_withholds_instead_of_filtering(
+        self,
+    ) -> None:
+        from chemdisco.dock import triage_candidates
+
+        # Best candidate is -10.0 against a -8.25 threshold: 1.75 kcal/mol, inside
+        # Vina's 2.5. Nothing here is distinguishably better than the threshold.
+        outcome = triage_candidates(self._candidates(), [-9.0, -8.5, -8.0, -7.5])
+        self.assertFalse(outcome.discriminated)
+        self.assertEqual(outcome.n_distinguishable, 0)
+
+    def test_a_withheld_triage_reports_every_candidate_not_a_subset(self) -> None:
+        from chemdisco.dock import triage_candidates
+
+        outcome = triage_candidates(self._candidates(), [-9.0, -8.5, -8.0, -7.5])
+        # All three that docked, NOT the one that beat the median. Naming a subset
+        # is the thing withholding exists to refuse.
+        self.assertEqual(outcome.kept, [0, 1, 2])
+        self.assertEqual(outcome.n_assessed, 3)
+
+    def test_a_withheld_triage_says_so_and_says_why(self) -> None:
+        from chemdisco.dock import triage_candidates
+
+        outcome = triage_candidates(self._candidates(), [-9.0, -8.5, -8.0, -7.5])
+        self.assertIn("WITHHELD", outcome.explanation)
+        self.assertIn("indistinguishable", outcome.explanation)
+        self.assertIn("2.5 kcal/mol method error", outcome.explanation)
+        # It must not describe itself as a filter when it did not filter.
+        self.assertNotIn("filter, not a ranking", outcome.explanation)
+
+    def test_the_threshold_is_reported_even_when_the_triage_is_withheld(self) -> None:
+        # Withholding drops the cut, not the reference point.
+        from chemdisco.dock import triage_candidates
+
+        outcome = triage_candidates(self._candidates(), [-9.0, -8.5, -8.0, -7.5])
+        self.assertAlmostEqual(outcome.threshold, -8.25)
+
+    def test_a_candidate_distinguishably_WORSE_does_not_license_filtering(
+        self,
+    ) -> None:
+        # The -4.0 candidate is 4.25 kcal/mol from the threshold, well outside the
+        # error -- the method can tell it apart. But being able to identify a
+        # clearly bad candidate is not evidence the threshold can identify a good
+        # one, so this must still withhold.
+        from chemdisco.dock import triage_candidates
+
+        outcome = triage_candidates(self._candidates(), [-9.0, -8.5, -8.0, -7.5])
+        # max, not min: these are negative, so the WORST score is the largest.
+        worst = max(
+            r.best_score
+            for r in self._candidates().results
+            if r.best_score is not None
+        )
+        self.assertEqual(worst, -4.0)
+        from chemdisco.dock import scores_are_distinguishable
+
+        self.assertTrue(scores_are_distinguishable(worst, outcome.threshold))
+        self.assertFalse(outcome.discriminated)
 
     def test_triage_without_a_reference_distribution_raises(self) -> None:
         # A bare docking score has no meaning without actives docked the same way.
@@ -654,6 +748,7 @@ class TestPublicApi(unittest.TestCase):
         "select_decoys",
         "strip_to_receptor",
         "toolchain_report",
+        "TriageOutcome",
         "triage_candidates",
         "vina_available",
         "write_pdb",

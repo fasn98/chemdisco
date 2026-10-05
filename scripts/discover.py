@@ -57,6 +57,7 @@ if str(REPOSITORY_ROOT) not in sys.path:
 from chemdisco.curate import CurationPolicy, curate  # noqa: E402
 from chemdisco.data.chembl import ChEMBLClient, ChEMBLError, ResponseCache  # noqa: E402
 from chemdisco.dock import (  # noqa: E402
+    VINA_ERROR_KCAL,
     box_from_ligand,
     interleave_by_label,
     parse_pdb,
@@ -630,6 +631,18 @@ def combine(directory: pathlib.Path, output: str) -> int:
     #
     # Efficiency per heavy atom removes the size term from the comparison, which
     # is the whole reason the metric exists.
+    # Whether the threshold can discriminate at all at this method's precision,
+    # measured before it is applied rather than assumed because the number looks
+    # reasonable. Ligand efficiency is per heavy atom, so a margin only becomes
+    # comparable to Vina's error after multiplying back by the atom count.
+    #
+    # Measured on BACE1: not one of the 22 candidates clearing the reference
+    # median beat it by more than 2.5 kcal/mol -- margins ran a median of 0.49 and
+    # a maximum of 1.17 -- and the unconstrained control gave the same answer. The
+    # threshold has never discriminated at this precision in either population, so
+    # naming a "passing" subset reports as a filter something that does not filter.
+    triage_withheld = False
+    n_distinguishable = 0
     if reference_le:
         threshold = float(np.median(reference_le))
         passing_score = [
@@ -638,11 +651,69 @@ def combine(directory: pathlib.Path, output: str) -> int:
             if c.get("ligand_efficiency") is not None
             and c["ligand_efficiency"] <= threshold
         ]
-        print(
-            f"\n  {len(passing_score)} of {len(candidates)} candidates reach a "
-            f"ligand efficiency of {threshold:.3f} kcal/mol/atom or better, the "
-            "median known active."
-        )
+        # Distinguishable AND better. Being able to reject a clearly bad candidate
+        # is not evidence the threshold can identify a good one.
+        distinguishable = [
+            c
+            for c in passing_score
+            if c.get("heavy_atoms")
+            and abs(c["ligand_efficiency"] - threshold) * c["heavy_atoms"]
+            > VINA_ERROR_KCAL
+        ]
+        n_distinguishable = len(distinguishable)
+        triage_withheld = not distinguishable
+
+        if triage_withheld:
+            margins = [
+                abs(c["ligand_efficiency"] - threshold) * c["heavy_atoms"]
+                for c in passing_score
+                if c.get("heavy_atoms")
+            ]
+            print(
+                f"\n  TRIAGE WITHHELD. {len(passing_score)} of {len(candidates)} "
+                f"candidates reach a ligand efficiency of {threshold:.3f} "
+                "kcal/mol/atom, the median known active -- but not one of them "
+                f"reaches it by more than Vina's own {VINA_ERROR_KCAL} kcal/mol "
+                "method error"
+                + (
+                    f" (margins median {np.median(margins):.2f}, max "
+                    f"{max(margins):.2f} kcal/mol)"
+                    if margins
+                    else ""
+                )
+                + "."
+            )
+            print(
+                "  So the cut runs through a part of the distribution narrower "
+                "than the method can resolve. Those candidates are "
+                "indistinguishable from a median known active at Vina's "
+                "precision, and so are most of the "
+                f"{len(candidates) - len(passing_score)} above the line. A subset "
+                "called 'passing' would report as a filter something that does "
+                "not filter."
+            )
+            print(
+                f"  All {len(candidates)} candidates are reported below with their "
+                "efficiencies, unranked and uncut. The threshold stays a stated "
+                "reference point."
+            )
+            # Everything that could be assessed, because a check that cannot
+            # separate does not get to name a subset. Same move the
+            # conserved-feature check makes when nothing clears its floor.
+            passing_score = [
+                c for c in candidates if c.get("ligand_efficiency") is not None
+            ]
+        else:
+            print(
+                f"\n  {len(passing_score)} of {len(candidates)} candidates reach a "
+                f"ligand efficiency of {threshold:.3f} kcal/mol/atom or better, the "
+                "median known active."
+            )
+            print(
+                f"  {n_distinguishable} of them beat it by more than the "
+                f"{VINA_ERROR_KCAL} kcal/mol method error, so the comparison "
+                "separates something and the cut is entitled to act."
+            )
     else:
         threshold = float(np.median(reference))
         passing_score = [
@@ -737,17 +808,26 @@ def combine(directory: pathlib.Path, output: str) -> int:
             f"{min(efficiencies):.3f} to {max(efficiencies):.3f} kcal/mol/atom"
         )
 
-    print(
-        "\n  This is a filter, not a ranking. Docking on this target separates "
-        "actives from decoys (AUC 0.731) but does not order them reliably "
-        "(BEDROC 0.36, empty top 1%), so the survivors are listed by ligand "
-        "efficiency -- which at least corrects for the size bias -- and that "
-        "order still carries far less information than it appears to."
-    )
+    if triage_withheld:
+        print(
+            "\n  NOT RANKED, and not a shortlist. The triage was withheld above, "
+            "so these are reported in the order they were docked. Sorting them by "
+            "ligand efficiency would imply an ordering the method cannot support: "
+            "the whole set spans less than Vina's error, so the first entry is "
+            "not better evidence than the last."
+        )
+    else:
+        print(
+            "\n  This is a filter, not a ranking. Docking on this target separates "
+            "actives from decoys (AUC 0.731) but does not order them reliably "
+            "(BEDROC 0.36, empty top 1%), so the survivors are listed by ligand "
+            "efficiency -- which at least corrects for the size bias -- and that "
+            "order still carries far less information than it appears to."
+        )
+        survivors.sort(key=lambda c: (c.get("ligand_efficiency") or 0.0))
 
-    survivors.sort(key=lambda c: (c.get("ligand_efficiency") or 0.0))
-
-    heading("The shortlist")
+    heading("Candidates, with the triage withheld" if triage_withheld
+            else "The shortlist")
     if not survivors:
         reasons = []
         if len(passing_score) == 0:
@@ -774,11 +854,23 @@ def combine(directory: pathlib.Path, output: str) -> int:
             if profile_usable
             else ""
         )
-        print(
-            f"{len(survivors)} structures that are novel, pass the filters "
-            f"calibrated for this target, {checked}occupy the site about as well "
-            "as known inhibitors do per heavy atom.\n"
-        )
+        if triage_withheld:
+            print(
+                f"{len(survivors)} structures that are novel, pass the filters "
+                f"calibrated for this target, and {checked}are INDISTINGUISHABLE "
+                "from a median known active at Vina's precision -- which is a "
+                "weaker and more accurate statement than 'reach the median'.\n"
+                "\n"
+                "This is not a ranked shortlist and no subset of it passed a "
+                "test. The efficiency threshold is printed beside each entry as a "
+                "reference point, not as a line anything cleared.\n"
+            )
+        else:
+            print(
+                f"{len(survivors)} structures that are novel, pass the filters "
+                f"calibrated for this target, {checked}occupy the site about as "
+                "well as known inhibitors do per heavy atom.\n"
+            )
         if not profile_usable:
             print(
                 "  Note: none has been checked for the binding chemistry. The "
@@ -848,7 +940,24 @@ def combine(directory: pathlib.Path, output: str) -> int:
                     "n_survivors": len(survivors),
                     "reference_median": threshold,
                     "reference_n": len(reference_scores),
-                    "shortlist": survivors[:50],
+                    # Recorded explicitly, by the criterion this project applies
+                    # to new fields: add one only when the record lacking it can
+                    # be read unambiguously. It cannot be here. With the triage
+                    # withheld, `n_passing_score` equals every assessed candidate
+                    # and `shortlist` is not a shortlist -- a reader given only
+                    # those numbers would conclude every candidate passed a test
+                    # that was never applied. The verdict is not inferable from
+                    # the counts, so it is stated.
+                    "triage_withheld": triage_withheld,
+                    "triage_n_distinguishable": n_distinguishable,
+                    "vina_error_kcal": VINA_ERROR_KCAL,
+                    # Named for what it is on each branch. "shortlist" would be a
+                    # false label for an uncut, unranked set.
+                    (
+                        "candidates_unranked"
+                        if triage_withheld
+                        else "shortlist"
+                    ): survivors[:50],
                 },
                 indent=2,
             )

@@ -298,12 +298,40 @@ def interleave_by_label(
     return ordered_smiles, ordered_labels
 
 
+@dataclass(frozen=True, slots=True)
+class TriageOutcome:
+    """What the triage did, and whether it was entitled to do it.
+
+    Attributes:
+        kept: Indices into ``screen_result.results``. When ``discriminated`` is
+            False this is every assessed candidate, because a check that cannot
+            separate does not get to name a subset.
+        explanation: Prose for the report, stating the verdict either way.
+        discriminated: True when at least one candidate beat the threshold by
+            more than the method error, so the filter is doing real work. False
+            when the triage is **withheld**.
+        threshold: The reference percentile, reported either way. A withheld
+            triage keeps the threshold as a stated reference point; it just
+            stops being a cut.
+        n_distinguishable: Candidates beating the threshold by more than
+            :data:`~chemdisco.dock.engine.VINA_ERROR_KCAL`.
+        n_assessed: Candidates that docked and could be compared at all.
+    """
+
+    kept: list[int]
+    explanation: str
+    discriminated: bool
+    threshold: float
+    n_distinguishable: int
+    n_assessed: int
+
+
 def triage_candidates(
     screen_result: ScreenResult,
     reference_scores: Sequence[float],
     *,
     percentile: float = 50.0,
-) -> tuple[list[int], str]:
+) -> TriageOutcome:
     """Keep candidates scoring at least as well as the known actives typically do.
 
     The honest use of docking in this pipeline, given what was measured about it.
@@ -322,10 +350,26 @@ def triage_candidates(
             implausible, not selecting winners.
 
     Returns:
-        ``(kept_indices, explanation)``. Indices refer to positions in
-        ``screen_result.results``.
+        A :class:`TriageOutcome`. Read ``discriminated`` before reading ``kept``:
+        a withheld triage returns every assessed candidate, not a selection.
+
+    Withholding, and why it is not a tightening. Measured on BACE1 once the
+    pipeline ran end to end: not one of the 22 candidates that cleared the
+    reference median did so by more than Vina's own ~2.5 kcal/mol error, and the
+    whole surviving set spanned 0.029 kcal/mol/atom. The unconstrained control
+    gave the same answer, so the threshold had never discriminated at this
+    method's precision in either population. Presenting a "passing" subset under
+    those conditions reports as a filter something that does not filter.
+
+    So when nothing beats the threshold by more than the method error, this
+    reports every candidate with no cut and says so -- the same move the
+    conserved-feature check makes when no feature clears its enrichment floor,
+    and the same three-state honesty the enrichment verdict uses. Withholding a
+    check is not failing it, and it is not passing it either.
     """
     import numpy as np
+
+    from .engine import VINA_ERROR_KCAL, scores_are_distinguishable
 
     if not reference_scores:
         raise ValueError(
@@ -334,21 +378,70 @@ def triage_candidates(
         )
 
     threshold = float(np.percentile(np.asarray(reference_scores, dtype=float), percentile))
-    kept = [
+
+    assessed = [
         index
         for index, result in enumerate(screen_result.results)
-        if result.ok
-        and result.best_score is not None
-        and result.best_score <= threshold
+        if result.ok and result.best_score is not None
+    ]
+    below = [
+        index
+        for index in assessed
+        if screen_result.results[index].best_score <= threshold
+    ]
+    # Distinguishable AND better. A candidate the method can tell apart from the
+    # threshold because it is clearly WORSE is a candidate the filter discards
+    # correctly, but it is not evidence that the filter can identify a good one.
+    distinguishable = [
+        index
+        for index in below
+        if scores_are_distinguishable(
+            screen_result.results[index].best_score, threshold
+        )
     ]
 
+    reference_line = (
+        f"{threshold:.2f} kcal/mol, the {percentile:.0f}th percentile of "
+        f"{len(reference_scores)} known actives docked in the same receptor and box"
+    )
+
+    if not distinguishable:
+        explanation = (
+            f"TRIAGE WITHHELD: not one of {len(assessed)} docked candidates beats "
+            f"{reference_line} by more than the {VINA_ERROR_KCAL} kcal/mol method "
+            "error.\n"
+            f"All {len(assessed)} are reported with their scores and NO pass/fail. "
+            f"The {len(below)} that fall below the threshold are indistinguishable "
+            "from a median known active at Vina's precision -- and so are most of "
+            f"the {len(assessed) - len(below)} above it. A subset named 'passing' "
+            "here would report as a filter something that does not filter.\n"
+            "The threshold remains a stated reference point. It is not a cut, and "
+            "nothing is ranked."
+        )
+        return TriageOutcome(
+            kept=assessed,
+            explanation=explanation,
+            discriminated=False,
+            threshold=threshold,
+            n_distinguishable=0,
+            n_assessed=len(assessed),
+        )
+
     explanation = (
-        f"Kept {len(kept)} of {screen_result.n_succeeded} docked candidates "
-        f"scoring at or below {threshold:.2f} kcal/mol, the {percentile:.0f}th "
-        f"percentile of {len(reference_scores)} known actives docked in the same "
-        "receptor and box.\n"
+        f"Kept {len(below)} of {screen_result.n_succeeded} docked candidates "
+        f"scoring at or below {reference_line}.\n"
+        f"{len(distinguishable)} of them beat it by more than the "
+        f"{VINA_ERROR_KCAL} kcal/mol method error, so the comparison separates "
+        "something and the filter is entitled to discard the rest.\n"
         "This is a filter, not a ranking. Docking on this target does not order "
         "candidates reliably, so the survivors are not ranked against each other "
         "and their order carries no information."
     )
-    return kept, explanation
+    return TriageOutcome(
+        kept=below,
+        explanation=explanation,
+        discriminated=True,
+        threshold=threshold,
+        n_distinguishable=len(distinguishable),
+        n_assessed=len(assessed),
+    )
