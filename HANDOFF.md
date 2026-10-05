@@ -165,11 +165,32 @@ did not change that, which points at the scoring function rather than the sampli
 That was measured in isolated redocking. Whether it holds across a full pipeline run
 at higher exhaustiveness has never been tested.
 
-### 4. Cross-docking is not implemented
+### 4. Cross-docking — DONE, and it came back negative
 
-Redocking puts a ligand back into the receptor conformation it induced — the easiest
-version of the problem. Whether the setup places a *different* ligand correctly is
-what cross-docking measures, and this pipeline has never asked.
+Measured: 5 structures, all 25 ordered pairs. Diagonal (redocking) 5/5 within
+2 A with 4FRS at 1.78 A against the 1.82 A on record, so the arrangement is
+sound. Off-diagonal: a pose within 2 A exists in 9/20, and the TOP-RANKED pose is
+within 2 A in only 3/20.
+
+Consequence, written up in the README: the shortlist's poses are unreliable, and
+so are the scores read off them and the ligand efficiencies computed from those
+scores. The enrichment AUC is untouched -- it measures separation between two
+score populations, not individual pose correctness.
+
+What is still open here:
+
+- **Cross-docking with the generated candidates themselves.** This measured
+  crystallographic ligands against crystallographic poses, because that is the
+  only case where a right answer exists. The candidates have no crystal
+  structures, so their pose error cannot be measured directly -- only bounded by
+  this result. Any improvement would need a different kind of evidence
+  (consensus across receptor conformations, say) rather than more docking.
+- **Ensemble docking.** If one conformation places a different ligand correctly
+  one time in four, docking into several conformations and keeping agreement is
+  the standard response. Untried here.
+- **Rescoring.** Three independent routes now say the limit is the scoring
+  function. The obvious next move is a different scoring function on the same
+  poses, not more sampling.
 
 ### 5. Housekeeping
 

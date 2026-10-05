@@ -578,6 +578,92 @@ sorts its output by compound identifier, so the ranking was never order-dependen
 The instrument built because the cause was *not* known — a signature per shard — found
 the real one two runs later. A plausible story would have left it in place.
 
+## Cross-docking: a different ligand, and the answer is mostly no
+
+Redocking puts a ligand back into the conformation it induced — the easiest
+version of the problem. Cross-docking asks whether the setup places a *different*
+ligand correctly, which is the question that actually bears on a generated
+candidate. Five BACE1 structures at 1.25–1.70 Å, ligands chosen for chemotype
+distinctness (max pairwise Tanimoto 0.42, every other pair ≤ 0.17), all 25
+ordered pairs, 11.5 minutes.
+
+**The control.** All five diagonal cells — which are redocking — land within 2 Å,
+and 4FRS gives **1.78 Å** against the 1.82 Å already on record. The arrangement
+reproduces the known result, so the off-diagonal numbers are about cross-docking
+and not about the setup.
+
+Best-pose RMSD (rows = ligand source, columns = receptor; diagonal is redocking):
+
+```
+          4FRS    7MYI    6UWP    6EQM    4L7G
+ 4FRS     1.78    2.37    2.03    1.93    1.86
+ 7MYI     2.72    0.90    0.88    2.38    1.93
+ 6UWP     2.69    1.37    1.80    2.37    1.92
+ 6EQM     2.44    2.58    2.43    1.64    2.25
+ 4L7G     1.17    1.99    2.03    1.18    1.25
+```
+
+| Off-diagonal, 20 pairs | |
+|---|---|
+| a pose within 2 Å exists | **9/20** (45%) |
+| the **top-ranked** pose is within 2 Å | **3/20** (15%) |
+
+Where a correct pose existed it was rank 1 twice; the other seven times it sat at
+ranks 4–7.
+
+### What this does to the shortlist
+
+Every shortlisted candidate was docked into 4FRS, a conformation induced by 0V6,
+and none of them is 0V6. Docking the four other ligands into 4FRS:
+
+```
+7MYI -> 4FRS   top 2.85   best 2.72 (rank 2)
+6UWP -> 4FRS   top 4.24   best 2.69 (rank 9)
+6EQM -> 4FRS   top 2.99   best 2.44 (rank 5)
+4L7G -> 4FRS   top 1.31   best 1.17 (rank 5)
+```
+
+One of four within 2 Å, by either measure.
+
+**So the shortlist's poses are not reliable, and neither are the scores read off
+them or the ligand efficiencies computed from those scores.** That is a caveat on
+60 reported numbers, and it is the reason the triage is withheld rather than
+merely cautious — the efficiency values that the withheld threshold declined to
+rank are themselves resting on geometry that is probably wrong.
+
+**What this does not touch: the enrichment result.** AUC 0.731 [0.617, 0.831]
+measures whether actives score better than property-matched decoys. That is a
+statement about the separation of two score *populations*, not about any
+individual pose being correct, and a scoring function can order groups while
+misplacing individuals. This matrix is a direct demonstration of it doing exactly
+that. The enrichment number stands.
+
+**Third independent route to one conclusion.** Redocking: the search finds the
+pose, the score does not rank it first. Exhaustiveness 4 → 8: enrichment
+statistically unchanged, EF 1% identical at 0.00. Cross-docking: 9/20 found,
+3/20 ranked. On this target the limit is the **scoring function, not the
+sampling** — and more search effort will not fix it.
+
+The 2 Å threshold and the `nearest_neighbour_rmsd` metric are unchanged from
+redocking, because loosening either after seeing the result is the one move that
+would make a negative finding disappear.
+
+### The alignment, which is where this silently goes wrong
+
+Comparing a pose docked into one crystal against a ligand observed in another
+needs the two frames reconciled. The first implementation matched α-carbons by
+residue number and produced a **23.6 Å** residual on every pair involving 4FRS,
+while other pairs sat at 0.3–1.4 Å. Residue numbers are not comparable across PDB
+entries: 4FRS numbers its chain 58–446 on the pro-enzyme, 7MYI numbers the same
+protein −5–385 on the mature form. Matching by raw number pairs chemically
+unrelated positions, the identities then agree at **7%** — chance — and Kabsch
+fits it and returns a number with the right units.
+
+The offset is now measured by residue-identity agreement rather than assumed. The
+correct offset (61) reconciles 386 of 386 identities; the runner-up manages 0.11.
+All 20 alignments: identity agreement 1.000, residuals 0.32–1.39 Å. A transform
+whose own residual approaches the 2 Å criterion is refused outright.
+
 ## What this pipeline cannot do
 
 Stated here so it does not have to be inferred:
