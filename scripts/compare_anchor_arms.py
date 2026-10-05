@@ -56,6 +56,10 @@ HISTORIC = {
     "all_passers_double_warhead": True,
 }
 
+#: The ligand signature run 37230653219 recorded, per README.md. If the control
+#: reproduces it, the two arms of comparison B are the same molecules.
+HISTORIC_LIGAND_SIGNATURE = "f530b99d98df82f6"
+
 
 def load(path: pathlib.Path) -> dict:
     payload = json.loads(path.read_text())
@@ -194,10 +198,51 @@ def main() -> int:
     )
     print(
         "    This is the quantity HANDOFF item 2 says must be measured rather "
-        "than assumed. Two warheads bury more polar surface than one, so the "
-        "expected sign is positive: removing the second makes the pool less "
-        "efficient and the inherited threshold harder to reach."
+        "than assumed, and the measurement contradicted the reason given for "
+        "measuring it."
     )
+    if shift < 0:
+        print(
+            "\n    MEASURED: NEGATIVE. The single-warhead pool is MORE ligand "
+            "efficient\n"
+            "    than the double-warhead one. The expectation written into HANDOFF "
+            "item 2\n"
+            "    -- two amidines bury more polar surface, so the constrained pool "
+            "sits\n"
+            "    worse and the inherited threshold becomes harder to reach -- is "
+            "the\n"
+            "    wrong sign.\n"
+            "\n"
+            "    Why the premise failed: buried surface is the numerator, and "
+            "ligand\n"
+            "    efficiency divides by heavy-atom count. Gluing two inhibitors "
+            "end to\n"
+            "    end does bury more surface, but it costs ~20 heavy atoms to do "
+            "it, and\n"
+            "    Vina's score grows only CLOSE to linearly with size. Past a "
+            "point the\n"
+            "    denominator wins. The artefacts are better RAW scorers and worse\n"
+            "    per-atom ones -- which is the whole reason this project moved the\n"
+            "    threshold onto efficiency in the first place.\n"
+            "\n"
+            "    Consequence for the inherited threshold: it is not rejecting "
+            "legitimate\n"
+            "    candidates. It admits MORE of the constrained pool than of the "
+            "pool it\n"
+            "    was calibrated on. The risk that item 2 flagged runs in the "
+            "opposite\n"
+            "    direction from the one it predicted."
+        )
+    elif shift > 0:
+        print(
+            "\n    MEASURED: POSITIVE, as HANDOFF item 2 predicted. Removing the "
+            "second\n"
+            "    warhead left the pool less efficient, so the inherited threshold "
+            "is\n"
+            "    harder to reach than it was when it was chosen."
+        )
+    else:
+        print("\n    MEASURED: no movement in the median.")
 
     pass_on = [v for v in le_on if v <= t_on]
     pass_off = [v for v in le_off if v <= t_off]
@@ -315,9 +360,37 @@ def main() -> int:
         "-0.260 is all that survives.\n"
         "      Its per-candidate efficiencies were never committed and the Actions\n"
         "      artifacts are unreachable, so B compares a pass rate to a pass rate\n"
-        "      while A compares distribution to distribution. A is the stronger\n"
-        "      comparison and should carry the conclusion."
+        "      while A compares distribution to distribution."
     )
+    # The one confound B does NOT have, provided the signatures agree. Worth
+    # stating positively, because it is what makes B worth reporting at all.
+    if off.get("ligand_signature") == HISTORIC_LIGAND_SIGNATURE:
+        print(
+            f"\n    What B DOES control for, unexpectedly: the control reproduced "
+            f"ligand\n"
+            f"      signature {HISTORIC_LIGAND_SIGNATURE} -- the signature run "
+            f"{HISTORIC['run_id']} recorded.\n"
+            "      The two arms are therefore the SAME 60 molecules against the "
+            "same 30\n"
+            "      reference actives, not two samples of one population. B is a "
+            "paired\n"
+            "      comparison of search effort on identical input, which is far "
+            "stronger\n"
+            "      than the pass-rate-to-pass-rate reading above implies, and it "
+            "also\n"
+            "      independently confirms the generator is reproducible across "
+            "machines."
+        )
+    else:
+        print(
+            f"\n    The control's ligand signature ({off.get('ligand_signature')}) "
+            f"does NOT match the\n"
+            f"      {HISTORIC_LIGAND_SIGNATURE} that run {HISTORIC['run_id']} "
+            "recorded, so the two arms\n"
+            "      are different molecules and B carries a population difference on "
+            "top of\n"
+            "      the search-effort difference. Treat it as the weaker comparison."
+        )
     return 0
 
 

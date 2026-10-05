@@ -1,0 +1,65 @@
+
+==============================================================================
+Combining shards
+==============================================================================
+  discover_shard_0.json: 30 reference, 60 candidates, ligands f530b99d98df82f6, curation da70584f5064c941
+
+Pooled: 30 reference actives, 60 candidates, 133 CPU-minutes
+
+==============================================================================
+How generation was constrained: IT WAS NOT (control run)
+==============================================================================
+  anchoring motif(s), measured from the actives and recorded so this run compares field by field with the constrained one: amidine
+  The motif did NOT constrain the fragment pool. Products could carry it more than once, which reproduces the candidate population the triage threshold was calibrated against. Read the attrition below as the control arm, not as a pipeline result: a shortlist from this run would be assembled from recombination artefacts by construction.
+  fragment pool: all 81 fragments offered as reagents, none reserved as seeds.
+
+==============================================================================
+The feature profile the candidates were judged against
+==============================================================================
+  built from 30 actives against 1200 background compounds
+  background: unrelated ChEMBL targets (presumed non-binders)
+    families: protein kinase (360), aminergic GPCR (240), nuclear receptor (240), carbonic anhydrase (120), peptide GPCR (120), oxidoreductase (120)
+  conserved: amidine, basic_nitrogen_any, halogen_on_aromatic, primary_aliphatic_amine
+  most discriminating: amidine
+  set aside as ubiquitous: aromatic_ring
+
+  prevalence (actives vs background):
+    amidine: 90% vs 4% (22.5x)
+
+  CAUTION: a feature can be enriched among potent compounds without
+  being what binds. Late-stage optimisation adds fluorine, so aromatic
+  halogens correlate with potency inside an optimised series while
+  forming no specific interaction. This profile measures correlation
+  with potency, not binding mechanism, and cannot tell the two apart.
+
+==============================================================================
+4. Triage against the reference distribution
+==============================================================================
+  reference actives by raw score: median -9.03, range -10.20 to -7.51 kcal/mol
+  reference actives by ligand efficiency: median -0.261, range -0.347 to -0.149 kcal/mol/atom
+
+  16 of 60 candidates reach a ligand efficiency of -0.261 kcal/mol/atom or better, the median known active.
+  16 carry an anchoring motif more than once and are set aside as recombination artefacts: two drugs glued end to end rather than one designed candidate.
+
+  This is a filter, not a ranking. Docking on this target separates actives from decoys (AUC 0.731) but does not order them reliably (BEDROC 0.36, empty top 1%), so the survivors are listed by ligand efficiency -- which at least corrects for the size bias -- and that order still carries far less information than it appears to.
+
+==============================================================================
+The shortlist
+==============================================================================
+Nothing survived: 16 were recombination artefacts carrying the anchoring motif twice.
+
+==============================================================================
+What these are, and what they are not
+==============================================================================
+There is no shortlist from this run, which is itself the finding.
+
+The attrition above says where the candidates went. If most were set
+aside as recombination artefacts, the fragment set and the threshold
+together are selecting for molecules joined end to end rather than
+for designs -- more fragments or a different generator would be the
+response, not a looser filter.
+
+An empty list is a usable answer. A list assembled by relaxing the
+checks until something appeared would not be.
+
+Written to runs/control/shortlist.json

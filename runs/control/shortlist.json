@@ -1,0 +1,9 @@
+{
+  "n_candidates_docked": 60,
+  "n_passing_score": 16,
+  "n_dropped_no_conserved_feature": 0,
+  "n_survivors": 0,
+  "reference_median": -0.2608467741935484,
+  "reference_n": 30,
+  "shortlist": []
+}

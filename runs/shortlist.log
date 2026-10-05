@@ -1,0 +1,115 @@
+
+==============================================================================
+Combining shards
+==============================================================================
+  discover_shard_0.json: 30 reference, 60 candidates, ligands a8ae9075598df11d, curation da70584f5064c941
+
+Pooled: 30 reference actives, 60 candidates, 96 CPU-minutes
+
+==============================================================================
+How generation was constrained
+==============================================================================
+  anchoring motif(s), measured from the actives: amidine
+  fragment pool: 26 carrying the motif, used as build seeds; 55 motif-free, used as reagents. Every product therefore grows from exactly one warhead by construction rather than being filtered afterwards -- the filter version spends the generation budget on artefacts, which is how a previous run reached 15 artefacts and an empty shortlist.
+
+==============================================================================
+The feature profile the candidates were judged against
+==============================================================================
+  built from 30 actives against 1200 background compounds
+  background: unrelated ChEMBL targets (presumed non-binders)
+    families: protein kinase (360), aminergic GPCR (240), nuclear receptor (240), carbonic anhydrase (120), peptide GPCR (120), oxidoreductase (120)
+  conserved: amidine, basic_nitrogen_any, halogen_on_aromatic, primary_aliphatic_amine
+  most discriminating: amidine
+  set aside as ubiquitous: aromatic_ring
+
+  prevalence (actives vs background):
+    amidine: 90% vs 4% (22.5x)
+
+  CAUTION: a feature can be enriched among potent compounds without
+  being what binds. Late-stage optimisation adds fluorine, so aromatic
+  halogens correlate with potency inside an optimised series while
+  forming no specific interaction. This profile measures correlation
+  with potency, not binding mechanism, and cannot tell the two apart.
+
+==============================================================================
+4. Triage against the reference distribution
+==============================================================================
+  reference actives by raw score: median -9.03, range -10.20 to -7.51 kcal/mol
+  reference actives by ligand efficiency: median -0.261, range -0.347 to -0.149 kcal/mol/atom
+
+  22 of 60 candidates reach a ligand efficiency of -0.261 kcal/mol/atom or better, the median known active.
+
+  ligand efficiency across survivors: -0.290 to -0.261 kcal/mol/atom
+
+  This is a filter, not a ranking. Docking on this target separates actives from decoys (AUC 0.731) but does not order them reliably (BEDROC 0.36, empty top 1%), so the survivors are listed by ligand efficiency -- which at least corrects for the size bias -- and that order still carries far less information than it appears to.
+
+==============================================================================
+The shortlist
+==============================================================================
+22 structures that are novel, pass the filters calibrated for this target, retain a feature the known actives share, and occupy the site about as well as known inhibitors do per heavy atom.
+
+  1. CC1=NC2(N=C1N)c1cc(Oc3cc(-c4cccnc4)ccc3F)ccc1C[C@]21CC[C@@H](c2ccccc2)CC1
+     docking -11.60 kcal/mol | LE -0.290 | 40 heavy atoms | SAscore 4.20 | Tanimoto 0.53
+     retains: amidine
+  2. CC1=NC2(N=C1N)c1cc(OC(=O)c3cc(F)cc(F)c3)ccc1C[C@]21CC[C@@H](c2ccc(C)cc2)CC1
+     docking -11.01 kcal/mol | LE -0.290 | 38 heavy atoms | SAscore 4.22 | Tanimoto 0.52
+     retains: amidine
+  3. CC1=NC2(N=C1N)c1cc(Oc3ccc(Cl)cn3)ccc1C[C@]21CC[C@@H](c2ccccc2)CC1
+     docking -9.74 kcal/mol | LE -0.287 | 34 heavy atoms | SAscore 4.17 | Tanimoto 0.51
+     retains: amidine
+  4. CC#CCOc1ccc2c(c1)C1(N=C(C)C(N)=N1)[C@]1(CC[C@H](c3ccccc3)CC1)C2
+     docking -8.84 kcal/mol | LE -0.285 | 31 heavy atoms | SAscore 4.31 | Tanimoto 0.57
+     retains: amidine
+  5. CC1=NC2(N=C1N)c1cc(OCc3cccc(Cl)c3)ccc1C[C@]21CC[C@@H](c2ccc(C)cc2)CC1
+     docking -10.21 kcal/mol | LE -0.283 | 36 heavy atoms | SAscore 4.07 | Tanimoto 0.53
+     retains: amidine
+  6. CC1=NC2(N=C1N)c1cc(Oc3cc(Cl)c(F)c(C#N)c3)ccc1C[C@]21CC[C@@H](c2ccccc2)CC1
+     docking -10.31 kcal/mol | LE -0.279 | 37 heavy atoms | SAscore 4.39 | Tanimoto 0.61
+     retains: amidine
+  7. CC1=NC2(N=C1N)c1cc(OCc3ccc(C#N)cn3)ccc1C[C@]21CC[C@@H](c2ccccc2)CC1
+     docking -10.03 kcal/mol | LE -0.279 | 36 heavy atoms | SAscore 4.25 | Tanimoto 0.55
+     retains: amidine
+  8. CC1=NC2(N=C1N)c1cc(Oc3cc(F)c(F)c(-c4cc(F)cc(F)c4)c3)ccc1C[C@]21CC[C@@H](c2ccc(C)cc2)CC1
+     docking -12.18 kcal/mol | LE -0.277 | 44 heavy atoms | SAscore 4.43 | Tanimoto 0.53
+     retains: amidine
+  9. CC1=NC2(N=C1N)c1cc(OCc3c(C)noc3C)ccc1C[C@]21CC[C@@H](c2ccc(C)cc2)CC1
+     docking -9.95 kcal/mol | LE -0.277 | 36 heavy atoms | SAscore 4.26 | Tanimoto 0.53
+     retains: amidine
+ 10. CC(=O)Oc1ccc2c(c1)C1(N=C(C)C(N)=N1)[C@]1(CC[C@H](c3ccccc3)CC1)C2
+     docking -8.29 kcal/mol | LE -0.276 | 30 heavy atoms | SAscore 4.12 | Tanimoto 0.55
+     retains: amidine
+ 11. CC1=NC2(N=C1N)c1cc(OCC(C)C)ccc1C[C@]21CC[C@@H](c2ccc(C)cc2)CC1
+     docking -8.83 kcal/mol | LE -0.276 | 32 heavy atoms | SAscore 4.14 | Tanimoto 0.77
+     retains: amidine
+ 12. CC1=NC2(N=C1N)c1cc(O[C@H](C)c3cccc(Cl)c3)ccc1C[C@]21CC[C@@H](c2ccccc2)CC1
+     docking -9.90 kcal/mol | LE -0.275 | 36 heavy atoms | SAscore 4.42 | Tanimoto 0.53
+     retains: amidine
+ 13. CC1=NC2(N=C1N)c1cc(Oc3cc(F)c(F)c(-c4ncc(Cl)cc4Cl)c3)ccc1C[C@]21CC[C@@H](c2ccccc2)CC1
+     docking -11.79 kcal/mol | LE -0.274 | 43 heavy atoms | SAscore 4.47 | Tanimoto 0.49
+     retains: amidine
+ 14. CC1=NC2(N=C1N)c1cc(O[C@H](C)c3cccnc3)ccc1C[C@]21CC[C@@H](c2ccc(C)cc2)CC1
+     docking -9.85 kcal/mol | LE -0.274 | 36 heavy atoms | SAscore 4.51 | Tanimoto 0.53
+     retains: amidine
+ 15. CC1=NC2(N=C1N)c1cc(Oc3ccc(F)c(-c4cc(Cl)cc(C#N)c4)c3)ccc1C[C@]21CC[C@@H](c2ccccc2)CC1
+     docking -11.64 kcal/mol | LE -0.271 | 43 heavy atoms | SAscore 4.36 | Tanimoto 0.65
+     retains: amidine
+
+==============================================================================
+What these are, and what they are not
+==============================================================================
+These structures have NO predicted potency. Generated candidates sit
+outside the QSAR model's applicability domain almost by construction --
+the reason to generate them is that they are new, and new is exactly
+where the model has no basis to predict. Attaching an IC50 to them would
+be inventing a number.
+
+What the evidence supports: they are novel against the curated ChEMBL
+set, synthetically plausible by SAscore, free of PAINS alerts, and they
+occupy the BACE1 site about as well as known inhibitors do in the same
+receptor and box.
+
+That is a shortlist worth a chemist's hour. It is not a result, and the
+only way to find out whether any of them bind is to make them and test
+them.
+
+Written to runs/shortlist.json

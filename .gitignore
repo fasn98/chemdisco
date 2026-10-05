@@ -27,3 +27,8 @@ cache/
 # other bulk artefacts are not.
 runs/**/*.pdbqt
 runs/**/*.sdf
+
+# Driver logs are the detached-launch wrapper's stdout and duplicate the tee'd
+# log beside them. The tee'd log is the record; this is the plumbing.
+runs/*_driver.log
+runs/*_queue.status

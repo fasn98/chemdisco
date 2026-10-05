@@ -1,0 +1,318 @@
+{
+  "n_candidates_docked": 60,
+  "n_passing_score": 22,
+  "n_dropped_no_conserved_feature": 0,
+  "n_survivors": 22,
+  "reference_median": -0.2608467741935484,
+  "reference_n": 30,
+  "shortlist": [
+    {
+      "smiles": "CC1=NC2(N=C1N)c1cc(Oc3cc(-c4cccnc4)ccc3F)ccc1C[C@]21CC[C@@H](c2ccccc2)CC1",
+      "score": -11.599,
+      "heavy_atoms": 40,
+      "ligand_efficiency": -0.289975,
+      "sascore": 4.200310657913963,
+      "novelty": 0.5263157894736842,
+      "retains_conserved_feature": true,
+      "retains_strong_feature": true,
+      "conserved_features": [
+        "amidine"
+      ],
+      "duplicated_motifs": {}
+    },
+    {
+      "smiles": "CC1=NC2(N=C1N)c1cc(OC(=O)c3cc(F)cc(F)c3)ccc1C[C@]21CC[C@@H](c2ccc(C)cc2)CC1",
+      "score": -11.011,
+      "heavy_atoms": 38,
+      "ligand_efficiency": -0.28976315789473683,
+      "sascore": 4.223413339212895,
+      "novelty": 0.5205479452054794,
+      "retains_conserved_feature": true,
+      "retains_strong_feature": true,
+      "conserved_features": [
+        "amidine"
+      ],
+      "duplicated_motifs": {}
+    },
+    {
+      "smiles": "CC1=NC2(N=C1N)c1cc(Oc3ccc(Cl)cn3)ccc1C[C@]21CC[C@@H](c2ccccc2)CC1",
+      "score": -9.742,
+      "heavy_atoms": 34,
+      "ligand_efficiency": -0.2865294117647059,
+      "sascore": 4.171631075471699,
+      "novelty": 0.5131578947368421,
+      "retains_conserved_feature": true,
+      "retains_strong_feature": true,
+      "conserved_features": [
+        "amidine"
+      ],
+      "duplicated_motifs": {}
+    },
+    {
+      "smiles": "CC#CCOc1ccc2c(c1)C1(N=C(C)C(N)=N1)[C@]1(CC[C@H](c3ccccc3)CC1)C2",
+      "score": -8.837,
+      "heavy_atoms": 31,
+      "ligand_efficiency": -0.2850645161290323,
+      "sascore": 4.310988511825904,
+      "novelty": 0.5652173913043478,
+      "retains_conserved_feature": true,
+      "retains_strong_feature": true,
+      "conserved_features": [
+        "amidine"
+      ],
+      "duplicated_motifs": {}
+    },
+    {
+      "smiles": "CC1=NC2(N=C1N)c1cc(OCc3cccc(Cl)c3)ccc1C[C@]21CC[C@@H](c2ccc(C)cc2)CC1",
+      "score": -10.205,
+      "heavy_atoms": 36,
+      "ligand_efficiency": -0.28347222222222224,
+      "sascore": 4.071523041947165,
+      "novelty": 0.527027027027027,
+      "retains_conserved_feature": true,
+      "retains_strong_feature": true,
+      "conserved_features": [
+        "amidine"
+      ],
+      "duplicated_motifs": {}
+    },
+    {
+      "smiles": "CC1=NC2(N=C1N)c1cc(Oc3cc(Cl)c(F)c(C#N)c3)ccc1C[C@]21CC[C@@H](c2ccccc2)CC1",
+      "score": -10.307,
+      "heavy_atoms": 37,
+      "ligand_efficiency": -0.27856756756756756,
+      "sascore": 4.3891240750493,
+      "novelty": 0.6075949367088608,
+      "retains_conserved_feature": true,
+      "retains_strong_feature": true,
+      "conserved_features": [
+        "amidine"
+      ],
+      "duplicated_motifs": {}
+    },
+    {
+      "smiles": "CC1=NC2(N=C1N)c1cc(OCc3ccc(C#N)cn3)ccc1C[C@]21CC[C@@H](c2ccccc2)CC1",
+      "score": -10.027,
+      "heavy_atoms": 36,
+      "ligand_efficiency": -0.27852777777777776,
+      "sascore": 4.252486972631864,
+      "novelty": 0.547945205479452,
+      "retains_conserved_feature": true,
+      "retains_strong_feature": true,
+      "conserved_features": [
+        "amidine"
+      ],
+      "duplicated_motifs": {}
+    },
+    {
+      "smiles": "CC1=NC2(N=C1N)c1cc(Oc3cc(F)c(F)c(-c4cc(F)cc(F)c4)c3)ccc1C[C@]21CC[C@@H](c2ccc(C)cc2)CC1",
+      "score": -12.178,
+      "heavy_atoms": 44,
+      "ligand_efficiency": -0.2767727272727273,
+      "sascore": 4.42721821073072,
+      "novelty": 0.5333333333333333,
+      "retains_conserved_feature": true,
+      "retains_strong_feature": true,
+      "conserved_features": [
+        "amidine"
+      ],
+      "duplicated_motifs": {}
+    },
+    {
+      "smiles": "CC1=NC2(N=C1N)c1cc(OCc3c(C)noc3C)ccc1C[C@]21CC[C@@H](c2ccc(C)cc2)CC1",
+      "score": -9.954,
+      "heavy_atoms": 36,
+      "ligand_efficiency": -0.2765,
+      "sascore": 4.256750999090842,
+      "novelty": 0.527027027027027,
+      "retains_conserved_feature": true,
+      "retains_strong_feature": true,
+      "conserved_features": [
+        "amidine"
+      ],
+      "duplicated_motifs": {}
+    },
+    {
+      "smiles": "CC(=O)Oc1ccc2c(c1)C1(N=C(C)C(N)=N1)[C@]1(CC[C@H](c3ccccc3)CC1)C2",
+      "score": -8.285,
+      "heavy_atoms": 30,
+      "ligand_efficiency": -0.27616666666666667,
+      "sascore": 4.120502239888353,
+      "novelty": 0.5454545454545454,
+      "retains_conserved_feature": true,
+      "retains_strong_feature": true,
+      "conserved_features": [
+        "amidine"
+      ],
+      "duplicated_motifs": {}
+    },
+    {
+      "smiles": "CC1=NC2(N=C1N)c1cc(OCC(C)C)ccc1C[C@]21CC[C@@H](c2ccc(C)cc2)CC1",
+      "score": -8.828,
+      "heavy_atoms": 32,
+      "ligand_efficiency": -0.275875,
+      "sascore": 4.138960346054778,
+      "novelty": 0.7666666666666667,
+      "retains_conserved_feature": true,
+      "retains_strong_feature": true,
+      "conserved_features": [
+        "amidine"
+      ],
+      "duplicated_motifs": {}
+    },
+    {
+      "smiles": "CC1=NC2(N=C1N)c1cc(O[C@H](C)c3cccc(Cl)c3)ccc1C[C@]21CC[C@@H](c2ccccc2)CC1",
+      "score": -9.899,
+      "heavy_atoms": 36,
+      "ligand_efficiency": -0.2749722222222222,
+      "sascore": 4.4177087201662735,
+      "novelty": 0.5333333333333333,
+      "retains_conserved_feature": true,
+      "retains_strong_feature": true,
+      "conserved_features": [
+        "amidine"
+      ],
+      "duplicated_motifs": {}
+    },
+    {
+      "smiles": "CC1=NC2(N=C1N)c1cc(Oc3cc(F)c(F)c(-c4ncc(Cl)cc4Cl)c3)ccc1C[C@]21CC[C@@H](c2ccccc2)CC1",
+      "score": -11.786,
+      "heavy_atoms": 43,
+      "ligand_efficiency": -0.2740930232558139,
+      "sascore": 4.469085556237297,
+      "novelty": 0.49411764705882355,
+      "retains_conserved_feature": true,
+      "retains_strong_feature": true,
+      "conserved_features": [
+        "amidine"
+      ],
+      "duplicated_motifs": {}
+    },
+    {
+      "smiles": "CC1=NC2(N=C1N)c1cc(O[C@H](C)c3cccnc3)ccc1C[C@]21CC[C@@H](c2ccc(C)cc2)CC1",
+      "score": -9.849,
+      "heavy_atoms": 36,
+      "ligand_efficiency": -0.27358333333333335,
+      "sascore": 4.51024629413077,
+      "novelty": 0.5263157894736842,
+      "retains_conserved_feature": true,
+      "retains_strong_feature": true,
+      "conserved_features": [
+        "amidine"
+      ],
+      "duplicated_motifs": {}
+    },
+    {
+      "smiles": "CC1=NC2(N=C1N)c1cc(Oc3ccc(F)c(-c4cc(Cl)cc(C#N)c4)c3)ccc1C[C@]21CC[C@@H](c2ccccc2)CC1",
+      "score": -11.639,
+      "heavy_atoms": 43,
+      "ligand_efficiency": -0.27067441860465113,
+      "sascore": 4.359857631526288,
+      "novelty": 0.65,
+      "retains_conserved_feature": true,
+      "retains_strong_feature": true,
+      "conserved_features": [
+        "amidine"
+      ],
+      "duplicated_motifs": {}
+    },
+    {
+      "smiles": "CC1=NC2(N=C1N)c1cc(OCc3cc(F)cc(C#N)c3)ccc1C[C@]21CC[C@@H](c2ccc(C)cc2)CC1",
+      "score": -10.134,
+      "heavy_atoms": 38,
+      "ligand_efficiency": -0.2666842105263158,
+      "sascore": 4.280171360854862,
+      "novelty": 0.5625,
+      "retains_conserved_feature": true,
+      "retains_strong_feature": true,
+      "conserved_features": [
+        "amidine"
+      ],
+      "duplicated_motifs": {}
+    },
+    {
+      "smiles": "CC1=NC2(N=C1N)c1cc(Oc3cc(F)c(F)c(C(F)F)c3)ccc1C[C@]21CC[C@@H](c2ccccc2)CC1",
+      "score": -10.09,
+      "heavy_atoms": 38,
+      "ligand_efficiency": -0.26552631578947367,
+      "sascore": 4.409351800751356,
+      "novelty": 0.5194805194805194,
+      "retains_conserved_feature": true,
+      "retains_strong_feature": true,
+      "conserved_features": [
+        "amidine"
+      ],
+      "duplicated_motifs": {}
+    },
+    {
+      "smiles": "CC1=NC2(N=C1N)c1cc(OCc3ccnc(F)c3)ccc1C[C@]21CC[C@@H](c2ccccc2)CC1",
+      "score": -9.263,
+      "heavy_atoms": 35,
+      "ligand_efficiency": -0.26465714285714287,
+      "sascore": 4.221423033908762,
+      "novelty": 0.5333333333333333,
+      "retains_conserved_feature": true,
+      "retains_strong_feature": true,
+      "conserved_features": [
+        "amidine"
+      ],
+      "duplicated_motifs": {}
+    },
+    {
+      "smiles": "CC1=NC2(N=C1N)c1cc(Oc3c(C)noc3C)ccc1C[C@]21CC[C@@H](c2ccccc2)CC1",
+      "score": -8.997,
+      "heavy_atoms": 34,
+      "ligand_efficiency": -0.2646176470588235,
+      "sascore": 4.34925111257745,
+      "novelty": 0.5070422535211268,
+      "retains_conserved_feature": true,
+      "retains_strong_feature": true,
+      "conserved_features": [
+        "amidine"
+      ],
+      "duplicated_motifs": {}
+    },
+    {
+      "smiles": "CC1=NC2(N=C1N)c1cc(OC(=O)c3cc(Cl)cc(C#N)c3)ccc1C[C@]21CC[C@@H](c2ccccc2)CC1",
+      "score": -9.992,
+      "heavy_atoms": 38,
+      "ligand_efficiency": -0.26294736842105265,
+      "sascore": 4.280544825921903,
+      "novelty": 0.5625,
+      "retains_conserved_feature": true,
+      "retains_strong_feature": true,
+      "conserved_features": [
+        "amidine"
+      ],
+      "duplicated_motifs": {}
+    },
+    {
+      "smiles": "[C-]#[N+]c1cc(Oc2ccc3c(c2)C2(N=C(C)C(N)=N2)[C@]2(CC[C@H](c4ccccc4)CC2)C3)ccc1F",
+      "score": -9.425,
+      "heavy_atoms": 36,
+      "ligand_efficiency": -0.26180555555555557,
+      "sascore": 4.416519935438289,
+      "novelty": 0.5,
+      "retains_conserved_feature": true,
+      "retains_strong_feature": true,
+      "conserved_features": [
+        "amidine"
+      ],
+      "duplicated_motifs": {}
+    },
+    {
+      "smiles": "CC1=NC2(N=C1N)c1cc(OCc3ncc(F)cc3F)ccc1C[C@]21CC[C@@H](c2ccc(C)cc2)CC1",
+      "score": -9.654,
+      "heavy_atoms": 37,
+      "ligand_efficiency": -0.26091891891891894,
+      "sascore": 4.35770636822782,
+      "novelty": 0.5263157894736842,
+      "retains_conserved_feature": true,
+      "retains_strong_feature": true,
+      "conserved_features": [
+        "amidine"
+      ],
+      "duplicated_motifs": {}
+    }
+  ]
+}

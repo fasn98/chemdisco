@@ -1,0 +1,15 @@
+# Forward-measured docking rate for the constrained discover run (runs/discover.log).
+# Written because the progress callback prints no timestamps, so the log alone cannot
+# distinguish a slow run from a hung one -- and a 30 min/10 ligand figure read off a
+# "tail -f" replay was wrong by ~3x and nearly set a 4.5 h expectation on a 101 min run.
+#
+# columns: utc  progress  interval_seconds  busy_ticks  idle_ticks  steal_ticks
+# 6 vCPU AMD EPYC, 100 ticks/s/cpu. steal=0 throughout: no hypervisor throttling.
+
+2026-10-05T00:12:51Z	40/90	467.7	158773	107959	0
+2026-10-05T00:19:38Z	50/90	406.6	144702	84210	0
+2026-10-05T00:29:18Z	60/90	580.3	209137	114027	0
+2026-10-05T00:39:45Z	70/90	626.6	224789	125027	0
+2026-10-05T00:50:17Z	80/90	631.6	220830	130196	0
+2026-10-05T01:03:31Z	90/90	794.8	286460	153753	0
+RUN_ENDED

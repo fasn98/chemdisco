@@ -1,0 +1,109 @@
+
+==============================================================================
+0. Toolchain
+==============================================================================
+Docking toolchain:
+  vina: present
+  meeko: present
+  obabel: present
+
+==============================================================================
+1. Curating BACE1
+==============================================================================
+8000 measurements in, 5091 curated points out, 2053 measurements rejected.
+     808 rejected by irreconcilable_replicates
+     520 rejected by potential_duplicate
+     414 rejected by censored_measurement
+     218 rejected by source_flagged_invalid
+      93 rejected by unconvertible_value
+
+  572 actives at pIC50 >= 8.0; using the top 30 as the docking reference and the top 50 as the fragment source
+
+  fetching a feature-profile background from unrelated targets
+  Background set: 1200 compounds from 10 unrelated targets across 6 protein families.
+    protein kinase: 360 compounds (EGFR, CDK2, MAPK14)
+    aminergic GPCR: 240 compounds (ADRB2, HTR1A)
+    nuclear receptor: 240 compounds (ESR1, AR)
+    carbonic anhydrase: 120 compounds (CA2)
+    peptide GPCR: 120 compounds (OPRM1)
+    oxidoreductase: 120 compounds (PTGS2)
+    These are PRESUMED non-binders, not measured ones: nobody tested them against this target. Any that do bind it dilute the enrichment rather than inflate it, so the error runs in the safe direction, but the figures below are a presumption and not a measurement.
+    4 duplicate(s) collapsed: promiscuous compounds appear against several targets and are counted once.
+
+==============================================================================
+2. Generating candidates
+==============================================================================
+  anchoring motif(s) measured from the actives: amidine
+  policy: max_generated=4000; heavy_atoms=16-60; max_sascore=6.5; reject_pains=True; reject_brenk=False; require_novelty=True; diversity_threshold=0.7; anchor_smarts=1 pattern(s), max_anchor_copies=1
+Input: 50 known actives, decomposed into 81 distinct BRICS fragments.
+Generated: 4000 structures from fragment recombination.
+Removed:
+    3381 by near-duplicate of a retained candidate
+     211 by too large (over 60 heavy atoms)
+     209 by synthetic accessibility above 6.5
+       2 by PAINS alert
+Anchor split: 26 fragment(s) carry the motif, 55 do not.
+Retained: 197 candidates.
+
+Policy audit: 50 of 50 known actives (100%) would survive these filters.
+
+Anchor constraint active: 26 motif-bearing fragment(s) used as build seeds, 55 motif-free fragment(s) as reagents. Every product therefore grows from exactly one warhead by construction.
+
+  carrying 60 candidates forward to docking
+
+==============================================================================
+3. Preparing the 4FRS receptor
+==============================================================================
+Box centred at (25.50, 10.84, 21.88), size 26.3 x 21.1 x 22.1 A (12322 A^3)
+  derived from: co-crystallised ligand 0V6_A_501
+  evidence: 25 heavy atoms of 0V6 observed bound in the crystal structure
+  prepared with openbabel
+
+==============================================================================
+4. Docking reference actives and candidates together
+==============================================================================
+
+==============================================================================
+3b. Profiling the conserved features of the known actives
+==============================================================================
+Feature profile from 30 known actives (conserved = present in at least 80%):
+  aromatic_ring: 100% of actives, 98% of background (1.0x)  <- prevalent but not discriminating
+  basic_nitrogen_any: 97% of actives, 53% of background (1.8x)  <- conserved
+  halogen_on_aromatic: 93% of actives, 33% of background (2.8x)  <- conserved
+  amidine: 90% of actives, 4% of background (22.5x)  <- conserved
+  primary_aliphatic_amine: 90% of actives, 17% of background (5.4x)  <- conserved
+  amide: 77% of actives, 28% of background (2.8x)
+  aminopyridine: 70% of actives, 17% of background (4.1x)
+  guanidine: 30% of actives, 1% of background (32.7x)
+  secondary_alcohol: 10% of actives, 15% of background (0.7x)
+  hydroxyethylene: 10% of actives, 10% of background (1.0x)
+  secondary_aliphatic_amine: 7% of actives, 14% of background (0.5x)
+  nitrile: 7% of actives, 8% of background (0.9x)
+  Set aside as ubiquitous: aromatic_ring. Prevalent among the actives and no rarer elsewhere, so their presence in a candidate says nothing about binding.
+
+60 of 60 candidates retain at least one conserved feature; 0 retain none.
+  Most discriminating features: amidine
+    10/90
+    20/90
+    30/90
+    40/90
+    50/90
+    60/90
+    70/90
+    80/90
+    90/90
+
+Screened 90 ligand(s) against 4FRS in 5776s (64.2s each)
+  90 docked, 0 failed
+  failure rate by group: actives 0.0%, decoys 0.0%
+
+Shard written to runs/discover_shard_0.json
+Elapsed: 6029s
+
+==============================================================================
+Reproducibility
+==============================================================================
+  ligand signature:   a8ae9075598df11d
+  curation signature: da70584f5064c941
+  derived from 5091 curated compounds, 572 actives, 4000 generated, 60 carried forward, 90 in this shard's slice
+  Two shards of one run, or two runs of this pipeline, must print the same two signatures. They are the evidence that a pooled result is one experiment rather than several averaged together.

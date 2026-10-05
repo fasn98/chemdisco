@@ -1,0 +1,102 @@
+
+==============================================================================
+Are these two arms comparable at all?
+==============================================================================
+  receptor           same    4FRS vs 4FRS
+  box                same    (25.497500000000002, 10.835999999999999, 21.881500000000003)|(26.315, 21.144, 22.145) vs (25.497500000000002, 10.835999999999999, 21.881500000000003)|(26.315, 21.144, 22.145)
+  curated dataset    same    da70584f5064c941 vs da70584f5064c941
+  exhaustiveness     same    8 vs 8
+  thread count       same    6 vs 6
+
+  ligand signature   DIFFER  a8ae9075598df11d vs f530b99d98df82f6
+    Expected, and required: the candidate lists are the variable under test. This is not the pooling failure the combine step refuses -- these two arms are never pooled, they are compared.
+
+  arms: constraint ON  /  constraint OFF (control)
+
+  Comparable: everything except the fragment pool is held fixed.
+
+==============================================================================
+A. The generator. Constraint ON vs OFF, exhaustiveness 8, one machine
+==============================================================================
+Ligand efficiency, kcal/mol/atom (more negative = more efficient)
+
+  reference actives          n=30   min -0.347  p25 -0.279  median -0.261  p75 -0.249  max -0.149
+  candidates, ON             n=60   min -0.290  p25 -0.268  median -0.250  p75 -0.232  max -0.155
+  candidates, OFF (control)  n=60   min -0.310  p25 -0.263  median -0.203  p75 -0.168  max -0.099
+
+  threshold, ON arm  : -0.261
+  threshold, OFF arm : -0.261
+    Identical, as it must be: the same 30 reference actives docked in the same receptor and box at the same settings. The threshold is not the thing that moved.
+
+  median shift, OFF -> ON: -0.047 kcal/mol/atom (more efficient with one warhead)
+    This is the quantity HANDOFF item 2 says must be measured rather than assumed, and the measurement contradicted the reason given for measuring it.
+
+    MEASURED: NEGATIVE. The single-warhead pool is MORE ligand efficient
+    than the double-warhead one. The expectation written into HANDOFF item 2
+    -- two amidines bury more polar surface, so the constrained pool sits
+    worse and the inherited threshold becomes harder to reach -- is the
+    wrong sign.
+
+    Why the premise failed: buried surface is the numerator, and ligand
+    efficiency divides by heavy-atom count. Gluing two inhibitors end to
+    end does bury more surface, but it costs ~20 heavy atoms to do it, and
+    Vina's score grows only CLOSE to linearly with size. Past a point the
+    denominator wins. The artefacts are better RAW scorers and worse
+    per-atom ones -- which is the whole reason this project moved the
+    threshold onto efficiency in the first place.
+
+    Consequence for the inherited threshold: it is not rejecting legitimate
+    candidates. It admits MORE of the constrained pool than of the pool it
+    was calibrated on. The risk that item 2 flagged runs in the opposite
+    direction from the one it predicted.
+
+  reaching the threshold, ON : 22/60 (37%)
+  reaching the threshold, OFF: 16/60 (27%)
+
+  carrying the motif more than once, ON : 0/60
+  carrying the motif more than once, OFF: 60/60
+
+  Does the threshold still discriminate on the constrained pool?
+    YES -- 22 pass, 38 fail. It
+    separates within the constrained population, so it is still doing
+    work on the merits rather than on composition.
+
+  What comparison A does NOT control for:
+    - Selection depth. The constrained arm retained 197 candidates and carried forward 60; the control retained 96 and carried forward 60. Both apply the same rule -- the first N past the diversity filter -- but taking 60 from 197 samples that population differently from taking 60 from 96. The arms are not equally deep samples of their pools.
+    - n_anchor_escapes and n_anchor_lost are 0 in the control BY CONSTRUCTION, not by measurement: the generator counts them only while the constraint is active. Read duplicated motifs from the candidate rows above, which come from the feature screen and run in both arms.
+
+==============================================================================
+B. Search effort. Control at exhaustiveness 8 vs run 37230653219 at exhaustiveness 4
+==============================================================================
+Same generator in both arms -- neither constrained -- so what differs is
+the search effort. This comes free from the control run and answers a
+question open since exhaustiveness was raised from 4.
+
+  reaching threshold, exhaustiveness 4: 15/60 (25%)  at threshold -0.260
+  reaching threshold, exhaustiveness 8: 16/60 (27%)  at threshold -0.261
+
+  threshold movement: -0.001 kcal/mol/atom
+    The threshold is re-derived from the same 30 reference actives, so any
+    movement here is the search effort re-measuring them -- not a change in
+    the actives and not a change in the criterion.
+  pass-rate movement: +2%
+
+  What comparison B does NOT control for:
+    - Cores: 2 then, 6 now. This comparison is only valid while the CPU probe's verdict holds. Re-read
+      runs/cpu_determinism*.log before relying on it; if that verdict ever
+      changes to thread-dependent, comparison B dies and A survives, because A holds the thread count fixed.
+    - Sharding: 6 shards then, 1 process now. Run 37230653219 is the first run whose six shards agreed on one
+      ligand signature, so its pass rate is a statistic the README treats
+      as surviving. Against an earlier run it would not be.
+    - The historic arm is a SUMMARY, not a distribution: 15 of 60 at -0.260 is all that survives.
+      Its per-candidate efficiencies were never committed and the Actions
+      artifacts are unreachable, so B compares a pass rate to a pass rate
+      while A compares distribution to distribution.
+
+    What B DOES control for, unexpectedly: the control reproduced ligand
+      signature f530b99d98df82f6 -- the signature run 37230653219 recorded.
+      The two arms are therefore the SAME 60 molecules against the same 30
+      reference actives, not two samples of one population. B is a paired
+      comparison of search effort on identical input, which is far stronger
+      than the pass-rate-to-pass-rate reading above implies, and it also
+      independently confirms the generator is reproducible across machines.
