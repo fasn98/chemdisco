@@ -458,9 +458,29 @@ conserved-feature check is withheld when no feature clears its floor. All 60
 candidates are reported with their ligand efficiencies and no pass/fail; the
 survivors are described as indistinguishable from a median known active at Vina's
 precision — and so are most of the 38 the old cut rejected. The threshold stays as a
-reported reference point, never as a filter that ranks. Implementing that in
-`triage_candidates` is the one pending item; the measurement and the decision are
-recorded here.
+reported reference point, never as a filter that ranks.
+
+**This is now what the code does.** There were two triage paths, and only one of them
+was reachable by reading `chemdisco/dock`: `triage_candidates` thresholds raw score at
+a reference percentile, while the triage the shortlist actually comes from is inline in
+`combine()` and thresholds ligand efficiency at the reference median — it never called
+the library function at all. Both were changed, because changing only the library one
+leaves the pipeline's output identical and this section still describing behaviour the
+code does not execute.
+
+Both now measure, via `scores_are_distinguishable`, whether any candidate beats the
+threshold by more than `VINA_ERROR_KCAL`; if none does, the triage is withheld and
+every assessed candidate is reported with its efficiency, uncut and unsorted. The
+verdict is serialised explicitly as `triage_withheld`, and the survivor list is keyed
+`candidates_unranked` rather than `shortlist`, because with the cut withheld
+`n_passing_score` equals every candidate — a reader given the counts alone would
+otherwise conclude that everything passed a test that was never applied. A pool that
+genuinely separates by more than the error still filters, so withholding has not become
+unconditional; a test covers that in both paths.
+
+The distinction the implementation is careful about: *distinguishable and better*. A
+candidate the method can tell apart because it is clearly worse is one the filter
+discards correctly, but it is not evidence the threshold can identify a good one.
 
 ### Six method errors these runs produced
 

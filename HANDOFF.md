@@ -17,20 +17,28 @@ Last session: 2026-10-04. Repository state at handoff: 64 commits.
 
 ### Why `tests` first
 
-Four commits went in after GitHub Actions stopped running (spending limit), so
-**they have never been executed anywhere**:
+Four commits went in after GitHub Actions stopped running (spending limit) and had
+never been executed anywhere. They have now, on a 6-core Contabo box, and none of
+them was broken:
 
-| What | Verified how far |
+| What | Status |
 |---|---|
-| `ruff` over everything | passed locally |
-| 178 toolkit-free tests (+809 subtests) | passed locally |
-| `TestRunSettingsAreRecorded` in `test_dock_engine.py` | **never run** — needs numpy |
-| `scripts/probe_cpu_determinism.py` | **never run** — checked against the real function signatures only |
-| `scripts/run_local.sh` | **never run** — `bash -n` only |
-| `scripts/setup_self_hosted.sh` | **never run** — `bash -n` only |
+| `ruff` over everything | passes |
+| full suite with RDKit present | passes — see the count below |
+| `TestRunSettingsAreRecorded` in `test_dock_engine.py` | **ran, passes** |
+| `scripts/probe_cpu_determinism.py` | **ran** — verdict REPRODUCIBLE, see below |
+| `scripts/run_local.sh` | **ran** — every subcommand except `setup_self_hosted` |
+| `scripts/setup_self_hosted.sh` | still **never run** — `bash -n` only, and not needed to run the pipeline |
 
-If something in that list is broken, it was broken on arrival. Fix it rather than
-working around it.
+Two defects the scripts did have, both found by running them rather than by a test:
+output was block-buffered through `tee`, so a 101-minute run showed nothing for
+~30 minutes at a stretch on a machine where the log is the only record; and the
+`enrichment` branch never passed `--time-budget`, so it silently truncated a 54-ligand
+screen to 16 and reported an `INCONCLUSIVE` 8-vs-8 AUC that looked like a measurement.
+Both fixed.
+
+Run `tests` first anyway. It is cheap, and it is the only thing that tells you the
+tree you just pulled is the tree that was verified.
 
 ### Why `cpu-probe` second
 
@@ -62,7 +70,7 @@ per-shard figures exactly: 26 amidine seeds, 55 motif-free reagents, 197 retaine
 efficiency, 60/60 retain the amidine, 0 artefacts. The committed run is in `runs/`.
 What that shortlist turned out to mean is item 2.
 
-### 2. Make `triage_candidates` withhold, rather than filter, on this target
+### 2. Triage withholds instead of filtering when it cannot discriminate — DONE
 
 The population-shift worry that stood here has been measured, and it was the wrong
 worry. Full result in the README under "The triage threshold has never
@@ -82,12 +90,19 @@ candidates with their efficiencies and no pass/fail, exactly as the conserved-fe
 check is withheld when nothing clears its floor. The README now states this as the
 standard.
 
-What is **pending** is the code: `triage_candidates` still filters and labels
-survivors. It needs to stop ranking on this target — report the efficiencies, keep
-the reference median as a stated reference point only, and describe survivors as
-indistinguishable from a median known active at Vina's precision. The README
-describes the intended behaviour; the implementation does not match it yet. Close
-that gap before the next `discover` run is treated as producing a ranked shortlist.
+**Implemented.** Both triage paths withhold when nothing beats the threshold by more
+than `VINA_ERROR_KCAL`, reporting every assessed candidate with its efficiency,
+uncut and unsorted, with `triage_withheld` serialised explicitly and the list keyed
+`candidates_unranked` instead of `shortlist`.
+
+Two paths, which is the part that is easy to miss: `triage_candidates` in
+`chemdisco/dock/screen.py` works on raw score at a percentile, and the triage that
+actually produces the shortlist is inline in `combine()` in `scripts/discover.py`
+and works on ligand efficiency. `discover.py` never called the library function. An
+earlier attempt changed only the library function, left the pipeline output
+unchanged, and so left the README describing behaviour the code did not execute —
+`tests/test_discover_triage.py` exists to stop that recurring, driving `combine()`
+through a shard fixture and asserting on the JSON it writes.
 
 ### 3. Exhaustiveness has never been raised
 
