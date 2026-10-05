@@ -73,11 +73,19 @@ from .pdb import (
 )
 from .screen import (
     ScreenResult,
+    TriageOutcome,
     interleave_by_label,
     screen,
     shard_by_label,
-    TriageOutcome,
     triage_candidates,
+)
+from .superpose import (
+    ResidueCorrespondence,
+    Superposition,
+    alignment_is_trustworthy,
+    find_residue_correspondence,
+    match_alpha_carbons,
+    superpose,
 )
 
 __all__ = [
@@ -102,6 +110,12 @@ __all__ = [
     "shard_by_label",
     "TriageOutcome",
     "triage_candidates",
+    "ResidueCorrespondence",
+    "Superposition",
+    "alignment_is_trustworthy",
+    "find_residue_correspondence",
+    "match_alpha_carbons",
+    "superpose",
     "MIN_LIGAND_HEAVY_ATOMS",
     "VINA_ERROR_KCAL",
     "DockingError",
