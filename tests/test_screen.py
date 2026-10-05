@@ -910,3 +910,57 @@ class TestGroupTolerances(unittest.TestCase):
         text = describe_property_gap({"formal_charge": 0.6, "molecular_weight": 5.0})
         self.assertIn("WARNING", text)
         self.assertIn("formal_charge", text)
+
+
+class TestFailureDiagnostics(unittest.TestCase):
+    """A failure count with no message is a failure nobody can diagnose.
+
+    `failure_reasons` groups by the leading clause of the error, which for a
+    Python exception is exactly the class name -- so the message is discarded.
+    That is how a real `TypeError` in the enrichment screen reached the report as
+    a bare count of 1, with nothing to tell a chemistry failure from a bug.
+    """
+
+    def _screen_with_a_detailed_failure(self):
+        from chemdisco.dock import DockingResult, Pose, ScreenResult
+
+        return ScreenResult(
+            results=[
+                DockingResult("CCO", [Pose(1, -5.0)]),
+                DockingResult(
+                    "C1=CC=CC=C1",
+                    error="TypeError: unsupported operand type(s) for +: 'NoneType' and 'int'",
+                ),
+            ],
+            receptor_id="4FRS",
+        )
+
+    def test_grouping_still_collapses_to_the_class(self) -> None:
+        # The grouping is useful and must survive: many like failures, one line.
+        reasons = self._screen_with_a_detailed_failure().failure_reasons()
+        self.assertEqual(reasons, {"TypeError": 1})
+
+    def test_the_message_survives_in_failure_details(self) -> None:
+        details = self._screen_with_a_detailed_failure().failure_details()
+        self.assertEqual(len(details), 1)
+        smiles, error = details[0]
+        self.assertEqual(smiles, "C1=CC=CC=C1")
+        self.assertIn("unsupported operand", error)
+
+    def test_successful_ligands_are_not_listed_as_failures(self) -> None:
+        details = self._screen_with_a_detailed_failure().failure_details()
+        self.assertNotIn("CCO", [smiles for smiles, _ in details])
+
+    def test_the_message_reaches_the_report(self) -> None:
+        # describe() is what lands in the log, and on this machine the log is the
+        # only record -- so the message has to be there, not merely retrievable.
+        described = self._screen_with_a_detailed_failure().describe()
+        self.assertIn("unsupported operand", described)
+
+    def test_a_failure_with_no_message_is_reported_as_unknown_not_dropped(self) -> None:
+        from chemdisco.dock import DockingResult, ScreenResult
+
+        details = ScreenResult(
+            results=[DockingResult("CCO", error="")], receptor_id="4FRS"
+        ).failure_details()
+        self.assertEqual(details, [("CCO", "unknown")])

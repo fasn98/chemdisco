@@ -71,6 +71,18 @@ class ScreenResult:
         return self.elapsed_seconds / self.n_total if self.n_total else 0.0
 
     def failure_reasons(self) -> dict[str, int]:
+        """How many ligands failed, grouped by the leading clause of the error.
+
+        The grouping is the useful part and stays: ten ligands that all failed
+        embedding should read as one line, not ten. What it cannot do is explain
+        any single failure, because for a Python exception the leading clause is
+        exactly the class name -- so ``TypeError: unsupported operand ...``
+        collapses to ``TypeError`` and the half that says what went wrong is
+        gone. A real ``TypeError`` in the enrichment screen reached the report as
+        a bare count and left nothing to diagnose it with.
+
+        Use :meth:`failure_details` for the messages.
+        """
         counts: dict[str, int] = {}
         for result in self.results:
             if result.ok:
@@ -79,6 +91,20 @@ class ScreenResult:
             reason = (result.error or "unknown").split(":")[0].strip()
             counts[reason] = counts.get(reason, 0) + 1
         return dict(sorted(counts.items(), key=lambda kv: -kv[1]))
+
+    def failure_details(self) -> list[tuple[str, str]]:
+        """``(smiles, error)`` for every failure, with the message intact.
+
+        The counterpart to :meth:`failure_reasons`. Grouping answers "how often";
+        this answers "what happened, and to which ligand" -- which is what a
+        exception class on its own cannot, and what is needed to tell a chemistry
+        failure from a bug in this code.
+        """
+        return [
+            (result.smiles, result.error or "unknown")
+            for result in self.results
+            if not result.ok
+        ]
 
     def failure_rate_by_group(self) -> dict[int, float]:
         """Failure rate per label group.
@@ -135,6 +161,16 @@ class ScreenResult:
             lines.append(f"  STOPPED EARLY: {self.stopped_early}")
         for reason, count in self.failure_reasons().items():
             lines.append(f"    {count:>5} {reason}")
+
+        # The messages, not just the classes. On a local machine the log is the
+        # only record, so a count with no message is a failure nobody can chase
+        # later -- which is what happened to a TypeError in the enrichment run.
+        details = self.failure_details()
+        if details:
+            lines.append("  failure detail, one line per failed ligand:")
+            for smiles, error in details:
+                shown = error if len(error) <= 160 else error[:157] + "..."
+                lines.append(f"    {smiles[:44]}: {shown}")
 
         rates = self.failure_rate_by_group()
         if len(rates) > 1:
