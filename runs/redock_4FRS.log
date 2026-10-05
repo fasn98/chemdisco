@@ -1,0 +1,75 @@
+
+==============================================================================
+0. Toolchain
+==============================================================================
+Docking toolchain:
+  vina: present
+  meeko: present
+  obabel: present
+
+==============================================================================
+1. Fetching 4FRS
+==============================================================================
+  using cached .cache/pdb/4FRS.pdb
+4FRS: STRUCTURE OF BACE IN COMPLEX WITH (S)-4-(3-CHLORO-5-(5-(PROP-1-YN-1- Y
+  method=X-RAY DIFFRACTION, resolution=1.70 A
+  6050 protein atoms over 2 chain(s)
+  candidate ligands:
+    0V6_A_501: 25 heavy atoms
+    0V6_B_501: 25 heavy atoms
+  WARNING: alternate conformations present (A, B); only the first was kept
+
+==============================================================================
+2. Identifying the bound ligand
+==============================================================================
+  0V6_A_501: 25 heavy atoms, elements ['C', 'CL', 'N', 'O', 'S']
+  (also present: 0V6_B_501, 25 heavy atoms)
+[RDKit] WARNING:[14:01:32] Warning: molecule is tagged as 2D, but at least one Z coordinate is not zero. Marking the mol as 3D.
+  chemistry (RCSB idealised SDF): [H]/N=C1\N[C@](C)(c2sc(-c3cncc(C#CC)c3)cc2Cl)CC(=O)N1C
+  SMILES has 25 heavy atoms; the crystal ligand has 25
+
+==============================================================================
+3. Building the search box from the observed pose
+==============================================================================
+Box centred at (25.50, 10.84, 21.88), size 26.3 x 21.1 x 22.1 A (12322 A^3)
+  derived from: co-crystallised ligand 0V6_A_501
+  evidence: 25 heavy atoms of 0V6 observed bound in the crystal structure
+
+==============================================================================
+4. Preparing the receptor
+==============================================================================
+  6050 protein atoms kept; ligand, solvent and additives removed
+  prepared with openbabel: 6058 PDBQT lines
+
+==============================================================================
+5. Redocking
+==============================================================================
+  exhaustiveness=16, n_poses=9; this is the slow step
+
+[H]/N=C1\N[C@](C)(c2sc(-c3cncc(C#CC)c3)cc2Cl)CC(=O)N1C against 4FRS
+  best score: -8.32 ± 2.50 kcal/mol [predicted]
+  ligand efficiency: -0.333 kcal/mol/atom [predicted]
+  9 pose(s) retained, spanning 1.23 kcal/mol
+  the poses are not separated by more than the method's error, so which one ranks first is not determined by the score
+
+==============================================================================
+6. Comparing the predicted pose to the crystal pose
+==============================================================================
+  pose 1: score   -8.32 kcal/mol, RMSD   4.19 A 
+  pose 2: score   -8.21 kcal/mol, RMSD   3.92 A 
+  pose 3: score   -8.01 kcal/mol, RMSD   1.82 A <= correct
+  pose 4: score   -7.84 kcal/mol, RMSD   3.91 A 
+  pose 5: score   -7.28 kcal/mol, RMSD   1.78 A <= correct
+  pose 6: score   -7.25 kcal/mol, RMSD   4.05 A 
+  pose 7: score   -7.25 kcal/mol, RMSD   3.92 A 
+  pose 8: score   -7.24 kcal/mol, RMSD   4.02 A 
+  pose 9: score   -7.09 kcal/mol, RMSD   2.29 A 
+
+==============================================================================
+Verdict
+==============================================================================
+PARTIAL. The top-scoring pose is 4.19 A out, but a lower-ranked pose reaches 1.78 A. The search found the right answer and the scoring function did not rank it first -- which is the well-known weakness of empirical scoring, not a setup error. Treat score-based ranking on this target with corresponding caution.
+
+What this does and does not establish: redocking is the easiest docking problem, because the receptor is in the conformation this very ligand induced. Passing shows the mechanics are right. It does not show the setup will place a different ligand correctly -- cross-docking measures that, and it is a harder test.
+
+Elapsed: 31.4s

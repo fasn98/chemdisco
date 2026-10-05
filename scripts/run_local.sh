@@ -37,6 +37,13 @@ export PYTHONUNBUFFERED=1
 VENV=${VENV:-.venv}
 CPU=${CPU:-0}
 EXHAUSTIVENESS=${EXHAUSTIVENESS:-8}
+# validate_enrichment.py defaults to 1500s, which is smaller than the work it
+# schedules here: 54 ligands at ~105s each needs ~5700s on this machine. Left at
+# the default it stops early at 16 of 54, and the 8-vs-8 AUC it then reports is
+# INCONCLUSIVE by its own verdict -- a number that looks like a measurement of
+# enrichment but is a measurement of the time budget. Raised with headroom; the
+# script still reports what it actually docked, so headroom costs nothing.
+TIME_BUDGET=${TIME_BUDGET:-10800}
 
 activate() {
   if [ ! -d "$VENV" ]; then
@@ -103,7 +110,8 @@ case "${1:-}" in
     mkdir -p runs
     # No sharding: one process, one ligand list, nothing to pool.
     python scripts/validate_enrichment.py \
-      --exhaustiveness "$EXHAUSTIVENESS" 2>&1 | tee runs/enrichment.log
+      --exhaustiveness "$EXHAUSTIVENESS" \
+      --time-budget "$TIME_BUDGET" 2>&1 | tee runs/enrichment.log
     ;;
 
   discover)
