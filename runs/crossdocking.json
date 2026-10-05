@@ -1,0 +1,1726 @@
+{
+  "set": {
+    "accession": "P56817",
+    "max_resolution": 2.0,
+    "n_candidates_queried": 41,
+    "n_usable": 24,
+    "max_similarity_allowed": 0.45,
+    "most_similar_pair": 0.4166666666666667,
+    "pinned_control": "4FRS",
+    "selected": [
+      {
+        "pdb_id": "4FRS",
+        "ligand_code": "0V6",
+        "ligand_key": "0V6_A_501",
+        "n_heavy_atoms": 25,
+        "resolution": 1.7,
+        "smiles": "[H]/N=C1\\N[C@](C)(c2sc(-c3cncc(C#CC)c3)cc2Cl)CC(=O)N1C",
+        "smiles_source": "RCSB idealised SDF"
+      },
+      {
+        "pdb_id": "7MYI",
+        "ligand_code": "ZQS",
+        "ligand_key": "ZQS_A_401",
+        "n_heavy_atoms": 21,
+        "resolution": 1.25,
+        "smiles": "NC1=N[C@@]2(c3cccs3)CN(c3ncccn3)C[C@H]2CS1",
+        "smiles_source": "RCSB idealised SDF"
+      },
+      {
+        "pdb_id": "6UWP",
+        "ligand_code": "QKA",
+        "ligand_key": "QKA_A_401",
+        "n_heavy_atoms": 27,
+        "resolution": 1.29,
+        "smiles": "C[C@@H]1C[C@H]1CNC(=O)[C@@H]1C[C@H]1[C@]12CN(c3ncccn3)C[C@H]1CSC(N)=N2",
+        "smiles_source": "RCSB idealised SDF"
+      },
+      {
+        "pdb_id": "6EQM",
+        "ligand_code": "BUH",
+        "ligand_key": "BUH_A_401",
+        "n_heavy_atoms": 34,
+        "resolution": 1.35,
+        "smiles": "C[C@@]1(c2nc(NC(=O)c3ncc(C(F)(F)F)cc3Cl)ccc2F)CO[C@@](C)(C(F)(F)F)C(N)=N1",
+        "smiles_source": "RCSB idealised SDF"
+      },
+      {
+        "pdb_id": "4L7G",
+        "ligand_code": "1W0",
+        "ligand_key": "1W0_A_501",
+        "n_heavy_atoms": 22,
+        "resolution": 1.38,
+        "smiles": "NC1=N[C@@]2(c3cccc(-c4cncnc4)c3)CCOC[C@H]2O1",
+        "smiles_source": "RCSB idealised SDF"
+      }
+    ]
+  },
+  "settings": {
+    "exhaustiveness": 16,
+    "n_poses": 9,
+    "padding": 8.0,
+    "cpu": 6,
+    "rmsd_threshold_a": 2.0,
+    "rmsd_metric": "nearest_neighbour_rmsd (lower bound; see engine.py)"
+  },
+  "alignments": [
+    {
+      "receptor": "4FRS",
+      "ligand_source": "7MYI",
+      "offset": -61,
+      "identity_agreement": 1.0,
+      "n_matched": 386,
+      "residual_rmsd": 0.4156059273887898,
+      "trustworthy": true
+    },
+    {
+      "receptor": "4FRS",
+      "ligand_source": "6UWP",
+      "offset": -61,
+      "identity_agreement": 1.0,
+      "n_matched": 386,
+      "residual_rmsd": 0.45893777768243527,
+      "trustworthy": true
+    },
+    {
+      "receptor": "4FRS",
+      "ligand_source": "6EQM",
+      "offset": -61,
+      "identity_agreement": 1.0,
+      "n_matched": 375,
+      "residual_rmsd": 1.3008264669204226,
+      "trustworthy": true
+    },
+    {
+      "receptor": "4FRS",
+      "ligand_source": "4L7G",
+      "offset": -61,
+      "identity_agreement": 1.0,
+      "n_matched": 372,
+      "residual_rmsd": 1.2824208372119583,
+      "trustworthy": true
+    },
+    {
+      "receptor": "7MYI",
+      "ligand_source": "4FRS",
+      "offset": 61,
+      "identity_agreement": 1.0,
+      "n_matched": 386,
+      "residual_rmsd": 0.41560592738879015,
+      "trustworthy": true
+    },
+    {
+      "receptor": "7MYI",
+      "ligand_source": "6UWP",
+      "offset": 0,
+      "identity_agreement": 1.0,
+      "n_matched": 391,
+      "residual_rmsd": 0.31679733411396666,
+      "trustworthy": true
+    },
+    {
+      "receptor": "7MYI",
+      "ligand_source": "6EQM",
+      "offset": 0,
+      "identity_agreement": 1.0,
+      "n_matched": 378,
+      "residual_rmsd": 1.3865796273730524,
+      "trustworthy": true
+    },
+    {
+      "receptor": "7MYI",
+      "ligand_source": "4L7G",
+      "offset": 0,
+      "identity_agreement": 1.0,
+      "n_matched": 372,
+      "residual_rmsd": 1.3115937929875445,
+      "trustworthy": true
+    },
+    {
+      "receptor": "6UWP",
+      "ligand_source": "4FRS",
+      "offset": 61,
+      "identity_agreement": 1.0,
+      "n_matched": 386,
+      "residual_rmsd": 0.4589377776824376,
+      "trustworthy": true
+    },
+    {
+      "receptor": "6UWP",
+      "ligand_source": "7MYI",
+      "offset": 0,
+      "identity_agreement": 1.0,
+      "n_matched": 391,
+      "residual_rmsd": 0.31679733411396366,
+      "trustworthy": true
+    },
+    {
+      "receptor": "6UWP",
+      "ligand_source": "6EQM",
+      "offset": 0,
+      "identity_agreement": 1.0,
+      "n_matched": 378,
+      "residual_rmsd": 1.3557221811782993,
+      "trustworthy": true
+    },
+    {
+      "receptor": "6UWP",
+      "ligand_source": "4L7G",
+      "offset": 0,
+      "identity_agreement": 1.0,
+      "n_matched": 372,
+      "residual_rmsd": 1.280257670953089,
+      "trustworthy": true
+    },
+    {
+      "receptor": "6EQM",
+      "ligand_source": "4FRS",
+      "offset": 61,
+      "identity_agreement": 1.0,
+      "n_matched": 375,
+      "residual_rmsd": 1.3008264669204237,
+      "trustworthy": true
+    },
+    {
+      "receptor": "6EQM",
+      "ligand_source": "7MYI",
+      "offset": 0,
+      "identity_agreement": 1.0,
+      "n_matched": 378,
+      "residual_rmsd": 1.3865796273730522,
+      "trustworthy": true
+    },
+    {
+      "receptor": "6EQM",
+      "ligand_source": "6UWP",
+      "offset": 0,
+      "identity_agreement": 1.0,
+      "n_matched": 378,
+      "residual_rmsd": 1.3557221811782993,
+      "trustworthy": true
+    },
+    {
+      "receptor": "6EQM",
+      "ligand_source": "4L7G",
+      "offset": 0,
+      "identity_agreement": 1.0,
+      "n_matched": 369,
+      "residual_rmsd": 0.6701444108641864,
+      "trustworthy": true
+    },
+    {
+      "receptor": "4L7G",
+      "ligand_source": "4FRS",
+      "offset": 61,
+      "identity_agreement": 1.0,
+      "n_matched": 372,
+      "residual_rmsd": 1.2824208372119579,
+      "trustworthy": true
+    },
+    {
+      "receptor": "4L7G",
+      "ligand_source": "7MYI",
+      "offset": 0,
+      "identity_agreement": 1.0,
+      "n_matched": 372,
+      "residual_rmsd": 1.3115937929875443,
+      "trustworthy": true
+    },
+    {
+      "receptor": "4L7G",
+      "ligand_source": "6UWP",
+      "offset": 0,
+      "identity_agreement": 1.0,
+      "n_matched": 372,
+      "residual_rmsd": 1.2802576709530904,
+      "trustworthy": true
+    },
+    {
+      "receptor": "4L7G",
+      "ligand_source": "6EQM",
+      "offset": 0,
+      "identity_agreement": 1.0,
+      "n_matched": 369,
+      "residual_rmsd": 0.6701444108641849,
+      "trustworthy": true
+    }
+  ],
+  "cells": [
+    {
+      "ligand_source": "4FRS",
+      "receptor": "4FRS",
+      "diagonal": true,
+      "top_pose_rmsd": 4.185895555314299,
+      "top_pose_score": -8.325,
+      "best_pose_rmsd": 1.7766734984233883,
+      "best_pose_rank": 5,
+      "best_pose_score": -7.28,
+      "n_poses": 9,
+      "poses": [
+        {
+          "rank": 1,
+          "score": -8.325,
+          "rmsd": 4.185895555314299
+        },
+        {
+          "rank": 2,
+          "score": -8.215,
+          "rmsd": 3.916759916053063
+        },
+        {
+          "rank": 3,
+          "score": -8.011,
+          "rmsd": 1.82430011785342
+        },
+        {
+          "rank": 4,
+          "score": -7.836,
+          "rmsd": 3.9125205481888528
+        },
+        {
+          "rank": 5,
+          "score": -7.28,
+          "rmsd": 1.7766734984233883
+        },
+        {
+          "rank": 6,
+          "score": -7.255,
+          "rmsd": 4.053724465229476
+        },
+        {
+          "rank": 7,
+          "score": -7.255,
+          "rmsd": 3.923761893897233
+        },
+        {
+          "rank": 8,
+          "score": -7.241,
+          "rmsd": 4.018164740276337
+        },
+        {
+          "rank": 9,
+          "score": -7.094,
+          "rmsd": 2.2898095816028032
+        }
+      ],
+      "alignment_residual": null
+    },
+    {
+      "ligand_source": "4FRS",
+      "receptor": "7MYI",
+      "diagonal": false,
+      "top_pose_rmsd": 3.444030838680015,
+      "top_pose_score": -8.874,
+      "best_pose_rmsd": 2.374588985440957,
+      "best_pose_rank": 3,
+      "best_pose_score": -8.811,
+      "n_poses": 9,
+      "poses": [
+        {
+          "rank": 1,
+          "score": -8.874,
+          "rmsd": 3.444030838680015
+        },
+        {
+          "rank": 2,
+          "score": -8.853,
+          "rmsd": 2.524754874811019
+        },
+        {
+          "rank": 3,
+          "score": -8.811,
+          "rmsd": 2.374588985440957
+        },
+        {
+          "rank": 4,
+          "score": -8.773,
+          "rmsd": 2.4700866588249633
+        },
+        {
+          "rank": 5,
+          "score": -8.723,
+          "rmsd": 2.677356671761137
+        },
+        {
+          "rank": 6,
+          "score": -8.629,
+          "rmsd": 2.3990007613185487
+        },
+        {
+          "rank": 7,
+          "score": -8.621,
+          "rmsd": 2.6790166413248118
+        },
+        {
+          "rank": 8,
+          "score": -8.618,
+          "rmsd": 2.7123293479447548
+        },
+        {
+          "rank": 9,
+          "score": -8.584,
+          "rmsd": 4.3220833734067465
+        }
+      ],
+      "alignment_residual": 0.41560592738879015
+    },
+    {
+      "ligand_source": "4FRS",
+      "receptor": "6UWP",
+      "diagonal": false,
+      "top_pose_rmsd": 2.034857471191685,
+      "top_pose_score": -8.474,
+      "best_pose_rmsd": 2.034857471191685,
+      "best_pose_rank": 1,
+      "best_pose_score": -8.474,
+      "n_poses": 9,
+      "poses": [
+        {
+          "rank": 1,
+          "score": -8.474,
+          "rmsd": 2.034857471191685
+        },
+        {
+          "rank": 2,
+          "score": -8.299,
+          "rmsd": 2.442286991080641
+        },
+        {
+          "rank": 3,
+          "score": -8.169,
+          "rmsd": 2.1411473095891074
+        },
+        {
+          "rank": 4,
+          "score": -8.086,
+          "rmsd": 2.527808742521807
+        },
+        {
+          "rank": 5,
+          "score": -8.057,
+          "rmsd": 2.726951324952043
+        },
+        {
+          "rank": 6,
+          "score": -8.046,
+          "rmsd": 2.7466641868111905
+        },
+        {
+          "rank": 7,
+          "score": -8.018,
+          "rmsd": 3.4201981661003624
+        },
+        {
+          "rank": 8,
+          "score": -7.922,
+          "rmsd": 2.1461345422729994
+        },
+        {
+          "rank": 9,
+          "score": -7.911,
+          "rmsd": 2.5501504385658054
+        }
+      ],
+      "alignment_residual": 0.4589377776824376
+    },
+    {
+      "ligand_source": "4FRS",
+      "receptor": "6EQM",
+      "diagonal": false,
+      "top_pose_rmsd": 3.681287425574943,
+      "top_pose_score": -7.371,
+      "best_pose_rmsd": 1.9308896076328945,
+      "best_pose_rank": 6,
+      "best_pose_score": -7.148,
+      "n_poses": 9,
+      "poses": [
+        {
+          "rank": 1,
+          "score": -7.371,
+          "rmsd": 3.681287425574943
+        },
+        {
+          "rank": 2,
+          "score": -7.273,
+          "rmsd": 2.6081245715157424
+        },
+        {
+          "rank": 3,
+          "score": -7.213,
+          "rmsd": 4.365847600552958
+        },
+        {
+          "rank": 4,
+          "score": -7.213,
+          "rmsd": 3.7032230564575546
+        },
+        {
+          "rank": 5,
+          "score": -7.207,
+          "rmsd": 3.699695432931482
+        },
+        {
+          "rank": 6,
+          "score": -7.148,
+          "rmsd": 1.9308896076328945
+        },
+        {
+          "rank": 7,
+          "score": -7.019,
+          "rmsd": 2.7886168363262067
+        },
+        {
+          "rank": 8,
+          "score": -6.964,
+          "rmsd": 2.961451746016518
+        },
+        {
+          "rank": 9,
+          "score": -6.96,
+          "rmsd": 2.958353087165812
+        }
+      ],
+      "alignment_residual": 1.3008264669204237
+    },
+    {
+      "ligand_source": "4FRS",
+      "receptor": "4L7G",
+      "diagonal": false,
+      "top_pose_rmsd": 3.0637912288636904,
+      "top_pose_score": -8.083,
+      "best_pose_rmsd": 1.8602981485306203,
+      "best_pose_rank": 6,
+      "best_pose_score": -7.485,
+      "n_poses": 9,
+      "poses": [
+        {
+          "rank": 1,
+          "score": -8.083,
+          "rmsd": 3.0637912288636904
+        },
+        {
+          "rank": 2,
+          "score": -7.922,
+          "rmsd": 2.081454832719743
+        },
+        {
+          "rank": 3,
+          "score": -7.683,
+          "rmsd": 3.1699856227078356
+        },
+        {
+          "rank": 4,
+          "score": -7.65,
+          "rmsd": 2.9330858567468088
+        },
+        {
+          "rank": 5,
+          "score": -7.586,
+          "rmsd": 3.1349571480065697
+        },
+        {
+          "rank": 6,
+          "score": -7.485,
+          "rmsd": 1.8602981485306203
+        },
+        {
+          "rank": 7,
+          "score": -7.439,
+          "rmsd": 3.5786200784497444
+        },
+        {
+          "rank": 8,
+          "score": -7.372,
+          "rmsd": 2.9327891914535913
+        },
+        {
+          "rank": 9,
+          "score": -7.25,
+          "rmsd": 3.130950970051391
+        }
+      ],
+      "alignment_residual": 1.2824208372119579
+    },
+    {
+      "ligand_source": "7MYI",
+      "receptor": "4FRS",
+      "diagonal": false,
+      "top_pose_rmsd": 2.8516728947777747,
+      "top_pose_score": -6.586,
+      "best_pose_rmsd": 2.721516405680046,
+      "best_pose_rank": 2,
+      "best_pose_score": -6.53,
+      "n_poses": 9,
+      "poses": [
+        {
+          "rank": 1,
+          "score": -6.586,
+          "rmsd": 2.8516728947777747
+        },
+        {
+          "rank": 2,
+          "score": -6.53,
+          "rmsd": 2.721516405680046
+        },
+        {
+          "rank": 3,
+          "score": -6.422,
+          "rmsd": 2.811601429640887
+        },
+        {
+          "rank": 4,
+          "score": -6.222,
+          "rmsd": 3.0195845446554994
+        },
+        {
+          "rank": 5,
+          "score": -6.088,
+          "rmsd": 2.969851503175815
+        },
+        {
+          "rank": 6,
+          "score": -5.961,
+          "rmsd": 2.8032121893793955
+        },
+        {
+          "rank": 7,
+          "score": -5.833,
+          "rmsd": 5.422975725444404
+        },
+        {
+          "rank": 8,
+          "score": -5.799,
+          "rmsd": 3.277925296734122
+        },
+        {
+          "rank": 9,
+          "score": -5.797,
+          "rmsd": 3.122595223598236
+        }
+      ],
+      "alignment_residual": 0.4156059273887898
+    },
+    {
+      "ligand_source": "7MYI",
+      "receptor": "7MYI",
+      "diagonal": true,
+      "top_pose_rmsd": 1.450633556169757,
+      "top_pose_score": -8.216,
+      "best_pose_rmsd": 0.9027912008770078,
+      "best_pose_rank": 2,
+      "best_pose_score": -8.177,
+      "n_poses": 9,
+      "poses": [
+        {
+          "rank": 1,
+          "score": -8.216,
+          "rmsd": 1.450633556169757
+        },
+        {
+          "rank": 2,
+          "score": -8.177,
+          "rmsd": 0.9027912008770078
+        },
+        {
+          "rank": 3,
+          "score": -7.602,
+          "rmsd": 2.079865769478313
+        },
+        {
+          "rank": 4,
+          "score": -7.426,
+          "rmsd": 2.398488045574109
+        },
+        {
+          "rank": 5,
+          "score": -7.362,
+          "rmsd": 1.1987297443544134
+        },
+        {
+          "rank": 6,
+          "score": -7.261,
+          "rmsd": 2.133919108566388
+        },
+        {
+          "rank": 7,
+          "score": -6.954,
+          "rmsd": 3.0377522705353797
+        },
+        {
+          "rank": 8,
+          "score": -6.885,
+          "rmsd": 3.5936439789744115
+        },
+        {
+          "rank": 9,
+          "score": -6.8,
+          "rmsd": 3.04116383580209
+        }
+      ],
+      "alignment_residual": null
+    },
+    {
+      "ligand_source": "7MYI",
+      "receptor": "6UWP",
+      "diagonal": false,
+      "top_pose_rmsd": 0.88340601900524,
+      "top_pose_score": -8.074,
+      "best_pose_rmsd": 0.88340601900524,
+      "best_pose_rank": 1,
+      "best_pose_score": -8.074,
+      "n_poses": 9,
+      "poses": [
+        {
+          "rank": 1,
+          "score": -8.074,
+          "rmsd": 0.88340601900524
+        },
+        {
+          "rank": 2,
+          "score": -7.582,
+          "rmsd": 1.2051052553879327
+        },
+        {
+          "rank": 3,
+          "score": -7.191,
+          "rmsd": 2.089093567883495
+        },
+        {
+          "rank": 4,
+          "score": -6.98,
+          "rmsd": 2.0161859370792956
+        },
+        {
+          "rank": 5,
+          "score": -6.859,
+          "rmsd": 2.5844789333314413
+        },
+        {
+          "rank": 6,
+          "score": -6.851,
+          "rmsd": 1.1159534254278252
+        },
+        {
+          "rank": 7,
+          "score": -6.809,
+          "rmsd": 2.1617697014385437
+        },
+        {
+          "rank": 8,
+          "score": -6.808,
+          "rmsd": 3.216335174836623
+        },
+        {
+          "rank": 9,
+          "score": -6.769,
+          "rmsd": 2.4721950623742366
+        }
+      ],
+      "alignment_residual": 0.31679733411396366
+    },
+    {
+      "ligand_source": "7MYI",
+      "receptor": "6EQM",
+      "diagonal": false,
+      "top_pose_rmsd": 2.3785758004934703,
+      "top_pose_score": -6.298,
+      "best_pose_rmsd": 2.3785758004934703,
+      "best_pose_rank": 1,
+      "best_pose_score": -6.298,
+      "n_poses": 9,
+      "poses": [
+        {
+          "rank": 1,
+          "score": -6.298,
+          "rmsd": 2.3785758004934703
+        },
+        {
+          "rank": 2,
+          "score": -6.287,
+          "rmsd": 2.4046935754261307
+        },
+        {
+          "rank": 3,
+          "score": -6.275,
+          "rmsd": 2.788229358096915
+        },
+        {
+          "rank": 4,
+          "score": -6.16,
+          "rmsd": 2.8154207568489347
+        },
+        {
+          "rank": 5,
+          "score": -6.131,
+          "rmsd": 2.795341295530181
+        },
+        {
+          "rank": 6,
+          "score": -6.069,
+          "rmsd": 3.0407776966290685
+        },
+        {
+          "rank": 7,
+          "score": -6.057,
+          "rmsd": 2.8421451153082016
+        },
+        {
+          "rank": 8,
+          "score": -5.947,
+          "rmsd": 3.245156821387001
+        },
+        {
+          "rank": 9,
+          "score": -5.869,
+          "rmsd": 2.947519067279297
+        }
+      ],
+      "alignment_residual": 1.3865796273730522
+    },
+    {
+      "ligand_source": "7MYI",
+      "receptor": "4L7G",
+      "diagonal": false,
+      "top_pose_rmsd": 2.3224021999509885,
+      "top_pose_score": -6.787,
+      "best_pose_rmsd": 1.9282370002304587,
+      "best_pose_rank": 4,
+      "best_pose_score": -6.389,
+      "n_poses": 9,
+      "poses": [
+        {
+          "rank": 1,
+          "score": -6.787,
+          "rmsd": 2.3224021999509885
+        },
+        {
+          "rank": 2,
+          "score": -6.608,
+          "rmsd": 2.3844387079482687
+        },
+        {
+          "rank": 3,
+          "score": -6.463,
+          "rmsd": 2.1876936759454986
+        },
+        {
+          "rank": 4,
+          "score": -6.389,
+          "rmsd": 1.9282370002304587
+        },
+        {
+          "rank": 5,
+          "score": -6.09,
+          "rmsd": 2.5165806459675686
+        },
+        {
+          "rank": 6,
+          "score": -6.063,
+          "rmsd": 3.265621889456419
+        },
+        {
+          "rank": 7,
+          "score": -6.057,
+          "rmsd": 2.0693164972870335
+        },
+        {
+          "rank": 8,
+          "score": -6.039,
+          "rmsd": 3.1593425162555744
+        },
+        {
+          "rank": 9,
+          "score": -6.026,
+          "rmsd": 3.3478106719507683
+        }
+      ],
+      "alignment_residual": 1.3115937929875443
+    },
+    {
+      "ligand_source": "6UWP",
+      "receptor": "4FRS",
+      "diagonal": false,
+      "top_pose_rmsd": 4.235520943819894,
+      "top_pose_score": -7.963,
+      "best_pose_rmsd": 2.6930332450094943,
+      "best_pose_rank": 9,
+      "best_pose_score": -7.052,
+      "n_poses": 9,
+      "poses": [
+        {
+          "rank": 1,
+          "score": -7.963,
+          "rmsd": 4.235520943819894
+        },
+        {
+          "rank": 2,
+          "score": -7.801,
+          "rmsd": 3.1769868997178716
+        },
+        {
+          "rank": 3,
+          "score": -7.758,
+          "rmsd": 3.291024378851236
+        },
+        {
+          "rank": 4,
+          "score": -7.745,
+          "rmsd": 3.2592449376097155
+        },
+        {
+          "rank": 5,
+          "score": -7.488,
+          "rmsd": 3.590516119325255
+        },
+        {
+          "rank": 6,
+          "score": -7.387,
+          "rmsd": 4.0988608676500045
+        },
+        {
+          "rank": 7,
+          "score": -7.233,
+          "rmsd": 4.3310267595058685
+        },
+        {
+          "rank": 8,
+          "score": -7.135,
+          "rmsd": 2.9330638354239835
+        },
+        {
+          "rank": 9,
+          "score": -7.052,
+          "rmsd": 2.6930332450094943
+        }
+      ],
+      "alignment_residual": 0.45893777768243527
+    },
+    {
+      "ligand_source": "6UWP",
+      "receptor": "7MYI",
+      "diagonal": false,
+      "top_pose_rmsd": 1.3689683150879988,
+      "top_pose_score": -8.98,
+      "best_pose_rmsd": 1.3689683150879988,
+      "best_pose_rank": 1,
+      "best_pose_score": -8.98,
+      "n_poses": 9,
+      "poses": [
+        {
+          "rank": 1,
+          "score": -8.98,
+          "rmsd": 1.3689683150879988
+        },
+        {
+          "rank": 2,
+          "score": -8.782,
+          "rmsd": 1.9500853766525246
+        },
+        {
+          "rank": 3,
+          "score": -8.557,
+          "rmsd": 3.9000554599352957
+        },
+        {
+          "rank": 4,
+          "score": -8.402,
+          "rmsd": 2.012669993728306
+        },
+        {
+          "rank": 5,
+          "score": -8.359,
+          "rmsd": 1.9916359160337054
+        },
+        {
+          "rank": 6,
+          "score": -8.009,
+          "rmsd": 2.7744995367099707
+        },
+        {
+          "rank": 7,
+          "score": -7.987,
+          "rmsd": 2.370209279252867
+        },
+        {
+          "rank": 8,
+          "score": -7.949,
+          "rmsd": 1.935673781184248
+        },
+        {
+          "rank": 9,
+          "score": -7.809,
+          "rmsd": 2.1972238677125584
+        }
+      ],
+      "alignment_residual": 0.31679733411396666
+    },
+    {
+      "ligand_source": "6UWP",
+      "receptor": "6UWP",
+      "diagonal": true,
+      "top_pose_rmsd": 1.7969675072805915,
+      "top_pose_score": -8.285,
+      "best_pose_rmsd": 1.7969675072805915,
+      "best_pose_rank": 1,
+      "best_pose_score": -8.285,
+      "n_poses": 9,
+      "poses": [
+        {
+          "rank": 1,
+          "score": -8.285,
+          "rmsd": 1.7969675072805915
+        },
+        {
+          "rank": 2,
+          "score": -7.959,
+          "rmsd": 2.6254586830297475
+        },
+        {
+          "rank": 3,
+          "score": -7.942,
+          "rmsd": 2.840817253303469
+        },
+        {
+          "rank": 4,
+          "score": -7.733,
+          "rmsd": 3.2125241892733922
+        },
+        {
+          "rank": 5,
+          "score": -7.699,
+          "rmsd": 2.0180292274798606
+        },
+        {
+          "rank": 6,
+          "score": -7.681,
+          "rmsd": 2.086123393957034
+        },
+        {
+          "rank": 7,
+          "score": -7.547,
+          "rmsd": 2.521838115637378
+        },
+        {
+          "rank": 8,
+          "score": -7.522,
+          "rmsd": 2.287984346618301
+        },
+        {
+          "rank": 9,
+          "score": -7.462,
+          "rmsd": 2.240788113671252
+        }
+      ],
+      "alignment_residual": null
+    },
+    {
+      "ligand_source": "6UWP",
+      "receptor": "6EQM",
+      "diagonal": false,
+      "top_pose_rmsd": 3.1826417422885416,
+      "top_pose_score": -7.594,
+      "best_pose_rmsd": 2.37227858261231,
+      "best_pose_rank": 8,
+      "best_pose_score": -6.87,
+      "n_poses": 9,
+      "poses": [
+        {
+          "rank": 1,
+          "score": -7.594,
+          "rmsd": 3.1826417422885416
+        },
+        {
+          "rank": 2,
+          "score": -7.334,
+          "rmsd": 3.8520807745774177
+        },
+        {
+          "rank": 3,
+          "score": -7.252,
+          "rmsd": 3.539192435062661
+        },
+        {
+          "rank": 4,
+          "score": -7.151,
+          "rmsd": 4.005175461281774
+        },
+        {
+          "rank": 5,
+          "score": -6.959,
+          "rmsd": 3.9172478928683594
+        },
+        {
+          "rank": 6,
+          "score": -6.944,
+          "rmsd": 3.2495374374288
+        },
+        {
+          "rank": 7,
+          "score": -6.87,
+          "rmsd": 3.4268815330737783
+        },
+        {
+          "rank": 8,
+          "score": -6.87,
+          "rmsd": 2.37227858261231
+        },
+        {
+          "rank": 9,
+          "score": -6.74,
+          "rmsd": 3.370221272319338
+        }
+      ],
+      "alignment_residual": 1.3557221811782993
+    },
+    {
+      "ligand_source": "6UWP",
+      "receptor": "4L7G",
+      "diagonal": false,
+      "top_pose_rmsd": 3.4787342689477527,
+      "top_pose_score": -7.537,
+      "best_pose_rmsd": 1.916822320954784,
+      "best_pose_rank": 6,
+      "best_pose_score": -7.25,
+      "n_poses": 9,
+      "poses": [
+        {
+          "rank": 1,
+          "score": -7.537,
+          "rmsd": 3.4787342689477527
+        },
+        {
+          "rank": 2,
+          "score": -7.484,
+          "rmsd": 3.8361487060882773
+        },
+        {
+          "rank": 3,
+          "score": -7.388,
+          "rmsd": 2.6828201975867847
+        },
+        {
+          "rank": 4,
+          "score": -7.292,
+          "rmsd": 2.870379703589856
+        },
+        {
+          "rank": 5,
+          "score": -7.272,
+          "rmsd": 3.2755439558783803
+        },
+        {
+          "rank": 6,
+          "score": -7.25,
+          "rmsd": 1.916822320954784
+        },
+        {
+          "rank": 7,
+          "score": -7.142,
+          "rmsd": 3.522052018959122
+        },
+        {
+          "rank": 8,
+          "score": -7.015,
+          "rmsd": 3.1309006472444185
+        },
+        {
+          "rank": 9,
+          "score": -6.932,
+          "rmsd": 2.4752801698801945
+        }
+      ],
+      "alignment_residual": 1.2802576709530904
+    },
+    {
+      "ligand_source": "6EQM",
+      "receptor": "4FRS",
+      "diagonal": false,
+      "top_pose_rmsd": 2.992391904337134,
+      "top_pose_score": -9.445,
+      "best_pose_rmsd": 2.436456968101899,
+      "best_pose_rank": 5,
+      "best_pose_score": -8.71,
+      "n_poses": 9,
+      "poses": [
+        {
+          "rank": 1,
+          "score": -9.445,
+          "rmsd": 2.992391904337134
+        },
+        {
+          "rank": 2,
+          "score": -9.265,
+          "rmsd": 2.7712145427178725
+        },
+        {
+          "rank": 3,
+          "score": -9.26,
+          "rmsd": 2.7926820692657284
+        },
+        {
+          "rank": 4,
+          "score": -9.16,
+          "rmsd": 2.7956470567881793
+        },
+        {
+          "rank": 5,
+          "score": -8.71,
+          "rmsd": 2.436456968101899
+        },
+        {
+          "rank": 6,
+          "score": -8.36,
+          "rmsd": 4.286710461400243
+        },
+        {
+          "rank": 7,
+          "score": -8.289,
+          "rmsd": 2.601967432098122
+        },
+        {
+          "rank": 8,
+          "score": -8.112,
+          "rmsd": 3.634950172468936
+        },
+        {
+          "rank": 9,
+          "score": -7.812,
+          "rmsd": 5.467453901271152
+        }
+      ],
+      "alignment_residual": 1.3008264669204226
+    },
+    {
+      "ligand_source": "6EQM",
+      "receptor": "7MYI",
+      "diagonal": false,
+      "top_pose_rmsd": 3.403361801827299,
+      "top_pose_score": -10.026,
+      "best_pose_rmsd": 2.5811498982210384,
+      "best_pose_rank": 5,
+      "best_pose_score": -9.522,
+      "n_poses": 9,
+      "poses": [
+        {
+          "rank": 1,
+          "score": -10.026,
+          "rmsd": 3.403361801827299
+        },
+        {
+          "rank": 2,
+          "score": -9.96,
+          "rmsd": 3.758171379018683
+        },
+        {
+          "rank": 3,
+          "score": -9.858,
+          "rmsd": 3.2461227015849254
+        },
+        {
+          "rank": 4,
+          "score": -9.558,
+          "rmsd": 3.818078659641233
+        },
+        {
+          "rank": 5,
+          "score": -9.522,
+          "rmsd": 2.5811498982210384
+        },
+        {
+          "rank": 6,
+          "score": -9.516,
+          "rmsd": 3.358313097122132
+        },
+        {
+          "rank": 7,
+          "score": -9.413,
+          "rmsd": 3.2432808010438476
+        },
+        {
+          "rank": 8,
+          "score": -9.37,
+          "rmsd": 3.9923834666498705
+        },
+        {
+          "rank": 9,
+          "score": -9.206,
+          "rmsd": 3.654055097748868
+        }
+      ],
+      "alignment_residual": 1.3865796273730524
+    },
+    {
+      "ligand_source": "6EQM",
+      "receptor": "6UWP",
+      "diagonal": false,
+      "top_pose_rmsd": 3.9513648522352844,
+      "top_pose_score": -9.249,
+      "best_pose_rmsd": 2.4270106504459665,
+      "best_pose_rank": 5,
+      "best_pose_score": -8.523,
+      "n_poses": 9,
+      "poses": [
+        {
+          "rank": 1,
+          "score": -9.249,
+          "rmsd": 3.9513648522352844
+        },
+        {
+          "rank": 2,
+          "score": -8.856,
+          "rmsd": 4.408210024388176
+        },
+        {
+          "rank": 3,
+          "score": -8.765,
+          "rmsd": 2.6859013540428798
+        },
+        {
+          "rank": 4,
+          "score": -8.554,
+          "rmsd": 3.728919942317871
+        },
+        {
+          "rank": 5,
+          "score": -8.523,
+          "rmsd": 2.4270106504459665
+        },
+        {
+          "rank": 6,
+          "score": -8.478,
+          "rmsd": 3.675789549264959
+        },
+        {
+          "rank": 7,
+          "score": -8.462,
+          "rmsd": 3.5722809807228977
+        },
+        {
+          "rank": 8,
+          "score": -8.445,
+          "rmsd": 3.133867498058152
+        },
+        {
+          "rank": 9,
+          "score": -8.414,
+          "rmsd": 4.346042060395915
+        }
+      ],
+      "alignment_residual": 1.3557221811782993
+    },
+    {
+      "ligand_source": "6EQM",
+      "receptor": "6EQM",
+      "diagonal": true,
+      "top_pose_rmsd": 3.187804472194173,
+      "top_pose_score": -8.692,
+      "best_pose_rmsd": 1.6378910399729065,
+      "best_pose_rank": 7,
+      "best_pose_score": -8.255,
+      "n_poses": 9,
+      "poses": [
+        {
+          "rank": 1,
+          "score": -8.692,
+          "rmsd": 3.187804472194173
+        },
+        {
+          "rank": 2,
+          "score": -8.501,
+          "rmsd": 4.092555853224815
+        },
+        {
+          "rank": 3,
+          "score": -8.417,
+          "rmsd": 2.0383661637809487
+        },
+        {
+          "rank": 4,
+          "score": -8.372,
+          "rmsd": 2.550968149546364
+        },
+        {
+          "rank": 5,
+          "score": -8.364,
+          "rmsd": 3.8904987771870734
+        },
+        {
+          "rank": 6,
+          "score": -8.325,
+          "rmsd": 4.8389796019652
+        },
+        {
+          "rank": 7,
+          "score": -8.255,
+          "rmsd": 1.6378910399729065
+        },
+        {
+          "rank": 8,
+          "score": -8.065,
+          "rmsd": 3.4143011687002995
+        },
+        {
+          "rank": 9,
+          "score": -8.027,
+          "rmsd": 2.381065406617012
+        }
+      ],
+      "alignment_residual": null
+    },
+    {
+      "ligand_source": "6EQM",
+      "receptor": "4L7G",
+      "diagonal": false,
+      "top_pose_rmsd": 4.310024302939228,
+      "top_pose_score": -8.974,
+      "best_pose_rmsd": 2.246728534167866,
+      "best_pose_rank": 5,
+      "best_pose_score": -8.358,
+      "n_poses": 9,
+      "poses": [
+        {
+          "rank": 1,
+          "score": -8.974,
+          "rmsd": 4.310024302939228
+        },
+        {
+          "rank": 2,
+          "score": -8.783,
+          "rmsd": 2.487797921514222
+        },
+        {
+          "rank": 3,
+          "score": -8.586,
+          "rmsd": 4.460259219436819
+        },
+        {
+          "rank": 4,
+          "score": -8.427,
+          "rmsd": 3.918593756336561
+        },
+        {
+          "rank": 5,
+          "score": -8.358,
+          "rmsd": 2.246728534167866
+        },
+        {
+          "rank": 6,
+          "score": -8.281,
+          "rmsd": 4.570897412502233
+        },
+        {
+          "rank": 7,
+          "score": -8.218,
+          "rmsd": 4.232781568989623
+        },
+        {
+          "rank": 8,
+          "score": -8.194,
+          "rmsd": 2.609661419819325
+        },
+        {
+          "rank": 9,
+          "score": -8.158,
+          "rmsd": 3.1770273365767583
+        }
+      ],
+      "alignment_residual": 0.6701444108641849
+    },
+    {
+      "ligand_source": "4L7G",
+      "receptor": "4FRS",
+      "diagonal": false,
+      "top_pose_rmsd": 1.3074193859962189,
+      "top_pose_score": -8.625,
+      "best_pose_rmsd": 1.173496762429218,
+      "best_pose_rank": 5,
+      "best_pose_score": -8.027,
+      "n_poses": 9,
+      "poses": [
+        {
+          "rank": 1,
+          "score": -8.625,
+          "rmsd": 1.3074193859962189
+        },
+        {
+          "rank": 2,
+          "score": -8.405,
+          "rmsd": 1.36515319875183
+        },
+        {
+          "rank": 3,
+          "score": -8.272,
+          "rmsd": 2.2705885033735296
+        },
+        {
+          "rank": 4,
+          "score": -8.19,
+          "rmsd": 2.3517226485609433
+        },
+        {
+          "rank": 5,
+          "score": -8.027,
+          "rmsd": 1.173496762429218
+        },
+        {
+          "rank": 6,
+          "score": -7.979,
+          "rmsd": 2.4231672656072725
+        },
+        {
+          "rank": 7,
+          "score": -7.875,
+          "rmsd": 2.80436166208338
+        },
+        {
+          "rank": 8,
+          "score": -7.679,
+          "rmsd": 2.8605212157680624
+        },
+        {
+          "rank": 9,
+          "score": -7.362,
+          "rmsd": 2.8085683326652946
+        }
+      ],
+      "alignment_residual": 1.2824208372119583
+    },
+    {
+      "ligand_source": "4L7G",
+      "receptor": "7MYI",
+      "diagonal": false,
+      "top_pose_rmsd": 4.130923255979291,
+      "top_pose_score": -8.738,
+      "best_pose_rmsd": 1.9901680334129106,
+      "best_pose_rank": 6,
+      "best_pose_score": -8.384,
+      "n_poses": 9,
+      "poses": [
+        {
+          "rank": 1,
+          "score": -8.738,
+          "rmsd": 4.130923255979291
+        },
+        {
+          "rank": 2,
+          "score": -8.65,
+          "rmsd": 2.441486829696927
+        },
+        {
+          "rank": 3,
+          "score": -8.642,
+          "rmsd": 2.1567715973929604
+        },
+        {
+          "rank": 4,
+          "score": -8.619,
+          "rmsd": 2.0437053020202445
+        },
+        {
+          "rank": 5,
+          "score": -8.465,
+          "rmsd": 3.2199500721087024
+        },
+        {
+          "rank": 6,
+          "score": -8.384,
+          "rmsd": 1.9901680334129106
+        },
+        {
+          "rank": 7,
+          "score": -8.367,
+          "rmsd": 3.4449491771628584
+        },
+        {
+          "rank": 8,
+          "score": -8.355,
+          "rmsd": 2.1216935313477734
+        },
+        {
+          "rank": 9,
+          "score": -8.296,
+          "rmsd": 4.504373566494631
+        }
+      ],
+      "alignment_residual": 1.3115937929875445
+    },
+    {
+      "ligand_source": "4L7G",
+      "receptor": "6UWP",
+      "diagonal": false,
+      "top_pose_rmsd": 2.676224999995807,
+      "top_pose_score": -8.15,
+      "best_pose_rmsd": 2.033315383124632,
+      "best_pose_rank": 8,
+      "best_pose_score": -7.848,
+      "n_poses": 9,
+      "poses": [
+        {
+          "rank": 1,
+          "score": -8.15,
+          "rmsd": 2.676224999995807
+        },
+        {
+          "rank": 2,
+          "score": -7.996,
+          "rmsd": 3.061233866934139
+        },
+        {
+          "rank": 3,
+          "score": -7.933,
+          "rmsd": 3.060439402320062
+        },
+        {
+          "rank": 4,
+          "score": -7.929,
+          "rmsd": 2.2805170725673274
+        },
+        {
+          "rank": 5,
+          "score": -7.919,
+          "rmsd": 2.542258310700368
+        },
+        {
+          "rank": 6,
+          "score": -7.913,
+          "rmsd": 4.6938144927817955
+        },
+        {
+          "rank": 7,
+          "score": -7.897,
+          "rmsd": 2.5003640465745356
+        },
+        {
+          "rank": 8,
+          "score": -7.848,
+          "rmsd": 2.033315383124632
+        },
+        {
+          "rank": 9,
+          "score": -7.737,
+          "rmsd": 2.844828452978585
+        }
+      ],
+      "alignment_residual": 1.280257670953089
+    },
+    {
+      "ligand_source": "4L7G",
+      "receptor": "6EQM",
+      "diagonal": false,
+      "top_pose_rmsd": 3.5278689661730924,
+      "top_pose_score": -7.543,
+      "best_pose_rmsd": 1.175771126036601,
+      "best_pose_rank": 7,
+      "best_pose_score": -7.167,
+      "n_poses": 9,
+      "poses": [
+        {
+          "rank": 1,
+          "score": -7.543,
+          "rmsd": 3.5278689661730924
+        },
+        {
+          "rank": 2,
+          "score": -7.402,
+          "rmsd": 3.2599089961832797
+        },
+        {
+          "rank": 3,
+          "score": -7.371,
+          "rmsd": 2.80018263145949
+        },
+        {
+          "rank": 4,
+          "score": -7.348,
+          "rmsd": 3.502368980270667
+        },
+        {
+          "rank": 5,
+          "score": -7.242,
+          "rmsd": 3.1354148194630906
+        },
+        {
+          "rank": 6,
+          "score": -7.205,
+          "rmsd": 2.1897651585049824
+        },
+        {
+          "rank": 7,
+          "score": -7.167,
+          "rmsd": 1.175771126036601
+        },
+        {
+          "rank": 8,
+          "score": -6.989,
+          "rmsd": 2.5932094480963555
+        },
+        {
+          "rank": 9,
+          "score": -6.814,
+          "rmsd": 3.69034752117072
+        }
+      ],
+      "alignment_residual": 0.6701444108641864
+    },
+    {
+      "ligand_source": "4L7G",
+      "receptor": "4L7G",
+      "diagonal": true,
+      "top_pose_rmsd": 3.6333893705714804,
+      "top_pose_score": -7.773,
+      "best_pose_rmsd": 1.2522669625341656,
+      "best_pose_rank": 5,
+      "best_pose_score": -7.44,
+      "n_poses": 9,
+      "poses": [
+        {
+          "rank": 1,
+          "score": -7.773,
+          "rmsd": 3.6333893705714804
+        },
+        {
+          "rank": 2,
+          "score": -7.759,
+          "rmsd": 3.628591900698973
+        },
+        {
+          "rank": 3,
+          "score": -7.708,
+          "rmsd": 2.3314563337887404
+        },
+        {
+          "rank": 4,
+          "score": -7.518,
+          "rmsd": 2.642303893127428
+        },
+        {
+          "rank": 5,
+          "score": -7.44,
+          "rmsd": 1.2522669625341656
+        },
+        {
+          "rank": 6,
+          "score": -7.375,
+          "rmsd": 3.5799587097669665
+        },
+        {
+          "rank": 7,
+          "score": -7.239,
+          "rmsd": 3.500797142989527
+        },
+        {
+          "rank": 8,
+          "score": -7.174,
+          "rmsd": 2.9687616334700295
+        },
+        {
+          "rank": 9,
+          "score": -7.162,
+          "rmsd": 3.492423012752035
+        }
+      ],
+      "alignment_residual": null
+    }
+  ],
+  "complete": true
+}
