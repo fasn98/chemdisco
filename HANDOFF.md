@@ -53,40 +53,41 @@ README).
 
 ## Pending work
 
-### 1. The shortlist from run 37233542592 was never produced
+### 1. The shortlist from run 37233542592 — DONE
 
-Six shards docked successfully with the newly constrained generator — all reporting
-ligand signature `a8ae9075598df11d` — and the combine job could not start on the
-spending limit. Its artifacts live for 90 days.
+Produced end to end on a 6-core machine (`./scripts/run_local.sh discover`, 101
+minutes, one process), reproducing ligand signature `a8ae9075598df11d` and the
+per-shard figures exactly: 26 amidine seeds, 55 motif-free reagents, 197 retained,
+0 double-motif. Pooled outcome: 60 docked, 22 reach the reference median ligand
+efficiency, 60/60 retain the amidine, 0 artefacts. The committed run is in `runs/`.
+What that shortlist turned out to mean is item 2.
 
-Simplest path now: re-run the whole thing locally, which is free and fast:
+### 2. Make `triage_candidates` withhold, rather than filter, on this target
 
-```bash
-./scripts/run_local.sh discover
-```
+The population-shift worry that stood here has been measured, and it was the wrong
+worry. Full result in the README under "The triage threshold has never
+discriminated"; the short version:
 
-This is the first pipeline output where the candidates are constrained to one
-anchoring motif. What the per-shard logs already showed: 26 fragments carry the
-amidine (used as build seeds), 55 are motif-free (used as reagents), 197 candidates
-retained from a budget that previously yielded 60, zero carrying the motif twice.
-What is unknown: how many reach the reference median ligand efficiency, and whether
-anything survives.
+- The premise came out with the **wrong sign.** The single-warhead pool is *more*
+  ligand-efficient than the double-warhead control (median −0.250 vs −0.203), not
+  less, at every matched heavy-atom band. The threshold is not rejecting legitimate
+  candidates — it admits 37% of the new pool against 27% of the old.
+- The threshold **never discriminated at Vina's precision**, in either population.
+  None of the 22 survivors clears it by more than the 2.5 kcal/mol method error
+  (margins median 0.49, max 1.17); the whole shortlist spans 0.029 kcal/mol/atom.
+  The control gives the same answer: 0 of 16 passers clear the margin.
 
-### 2. The triage threshold is calibrated on a candidate population that no longer exists
+The decision taken: **withhold the triage as non-discriminating** and report all 60
+candidates with their efficiencies and no pass/fail, exactly as the conserved-feature
+check is withheld when nothing clears its floor. The README now states this as the
+standard.
 
-**This is the most important open item, and it is easy to miss because the number
-still looks valid.**
-
-Triage keeps candidates reaching the reference actives' median ligand efficiency,
-−0.260 kcal/mol/atom. That threshold was chosen while watching a candidate pool of
-double-warhead molecules. Two amidines bury more polar surface than one, so the
-constrained generator's candidates sit at a different place in the efficiency
-distribution by construction.
-
-A threshold inherited from a different population may now reject legitimate
-candidates or wave weak ones through. Measure it on the new pool; do not assume it
-transfers. The same class of error appears five times in the README — a number that
-stays in place after what it measures has changed underneath it.
+What is **pending** is the code: `triage_candidates` still filters and labels
+survivors. It needs to stop ranking on this target — report the efficiencies, keep
+the reference median as a stated reference point only, and describe survivors as
+indistinguishable from a median known active at Vina's precision. The README
+describes the intended behaviour; the implementation does not match it yet. Close
+that gap before the next `discover` run is treated as producing a ranked shortlist.
 
 ### 3. Exhaustiveness has never been raised
 

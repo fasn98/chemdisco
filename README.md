@@ -280,13 +280,30 @@ top, which is where a screen actually buys compounds. That is consistent with
 the redocking result — the score discriminates weakly at fine resolution.
 
 So `triage_candidates` filters against the actives' score distribution and
-deliberately leaves the survivors unordered.
+deliberately leaves the survivors unordered. Whether that filter discriminates at
+all at Vina's precision is a separate question, measured once the pipeline ran end
+to end — see "The triage threshold has never discriminated" below. It does not.
 
 **Using weak binders as decoys** is a harder control than DUD-E's property-matched
 library compounds: they are measured against this target, so there is no
 contamination from untested binders, but they often share the actives' chemotype.
 Enrichment here reads lower than a published DUD-E figure for the same target,
 which is the honest direction for the bias to run.
+
+**Reproduced on a second machine, at twice the search effort.** The figures above
+were measured on a 2-core runner at exhaustiveness 4. Re-run on a 6-core box at
+exhaustiveness 8, across all 54 ligands, the screen gives AUC-ROC
+**0.806 [0.681, 0.921]** — which *agrees* rather than diverges: 0.731 sits inside
+the new interval and 0.806 inside the old, and EF 1% reproduces at exactly 0.00. So
+doubling the search effort left enrichment statistically indistinguishable. That is
+the verdict redocking reached when 16→64 exhaustiveness did not move the pose
+ranking, and the one the triage reached when no survivor cleared the threshold by
+more than the scoring error. Three independent routes, one conclusion: on this
+target the limit is the scoring function, not the sampling — the score tells you
+whether a molecule fits the pocket, not how tightly it binds. (A caveat the run
+carries with it: one decoy failed with a `TypeError`, and attrition was unequal —
+0.0% of actives against 2.9% of decoys — which runs in the flattering direction,
+so it belongs next to the number.)
 
 **Three method errors this experiment produced,** recorded because each returned
 a believable wrong answer:
@@ -343,7 +360,7 @@ Run 37233542592, same target and seed, all six shards agreeing on ligand signatu
 ```
 26 fragments carry the amidine -> build seeds
 55 motif-free fragments        -> reagents
-197 candidates retained (the unconstrained run retained 60 from the same budget)
+197 candidates retained (the unconstrained run carried 60 forward, from 96 retained)
  0 products carried the motif more than once
  0 products lost the motif during recombination
 60 of 60 candidates carried forward retain a conserved feature; 0 retain none
@@ -354,10 +371,9 @@ unrelated-target background *before* generation, so a kinase run would be
 constrained on whatever separates kinase actives, and a target where nothing
 discriminates is generated unconstrained and says so.
 
-The pooled triage for this run has not been produced — the combine job could not
-start (GitHub Actions spending limit), and the per-shard artifacts are not reachable
-from this environment. The numbers above are per-shard measurements; the shortlist
-is not among them.
+The pooled shortlist for this run existed only as per-shard measurements until it
+was reproduced end to end on a single machine; the result, and what it showed about
+the triage threshold, is in "The triage threshold has never discriminated" below.
 
 ### The shards were never docking the same list
 
@@ -391,6 +407,60 @@ candidates sit outside the QSAR model's applicability domain almost by
 construction: the reason to generate them is that they are new, which is exactly
 where the model has no basis to predict. Attaching an IC50 would be inventing a
 number. At best it is a shortlist worth a chemist's hour, not a result.
+
+### The triage threshold has never discriminated
+
+Run 37233542592 was finished end to end on a 6-core machine — 101 minutes, one
+process, no sharding — reproducing the per-shard figures above and the ligand
+signature `a8ae9075598df11d` exactly. For the first time the pipeline produced the
+pooled shortlist the Actions spending limit had blocked:
+
+```
+60 candidates docked alongside 30 reference actives
+22 reach the reference median ligand efficiency (-0.261 kcal/mol/atom)
+60 of 60 retain the amidine; 0 artefacts
+shortlist: 22
+```
+
+The threshold barely moved: the measured reference median is −0.261 against the
+historic −0.260, despite exhaustiveness rising 4→8 and the machine changing. That
+near-identity is a coincidence, and it hides the finding rather than being one.
+
+**The one-warhead premise came out with the wrong sign.** The expectation on record
+was that two buried amidines make the double-warhead pool *more* efficient, so the
+constrained pool would sit worse and struggle to reach the bar. Measured, the
+single-warhead pool is *more* efficient — median −0.250 against the double-warhead
+control's −0.203, and higher at every matched heavy-atom band (30–34 atoms: −0.276
+vs −0.213; 45–60: −0.219 vs −0.156). The threshold admits more of the new pool
+(37%) than of the pool it was calibrated on (27%); it is not rejecting legitimate
+candidates.
+
+**But the population was never the point.** None of the 22 survivors clears the
+threshold by more than Vina's own 2.5 kcal/mol error — the margins run a median of
+0.49 and a maximum of 1.17 kcal/mol. Sixteen of the 60 sit within 0.010
+kcal/mol/atom of the cut, and the whole shortlist spans 0.029. By this package's own
+`scores_are_distinguishable`, no survivor is distinguishable from the threshold. The
+unconstrained control gives the same answer — 0 of its 16 passers clear the cut by
+the margin either — which is why the historic 15/60-all-artefacts result was never a
+population-shift problem.
+
+So the 22-vs-38 split is a cut through the densest part of a distribution whose width
+is below the method's resolution. The threshold has never discriminated at Vina's
+precision: not in the double-warhead pool it was calibrated on, not in the
+single-warhead pool it was re-measured against. This is the conclusion the redocking
+and enrichment sections reach by other routes — on this target the score separates
+groups on average and cannot order individuals — arrived at a third time, from the
+triage.
+
+**Therefore the triage is withheld, not tightened.** A check that cannot discriminate
+is reported as one and the candidates pass through unranked, exactly as the
+conserved-feature check is withheld when no feature clears its floor. All 60
+candidates are reported with their ligand efficiencies and no pass/fail; the
+survivors are described as indistinguishable from a median known active at Vina's
+precision — and so are most of the 38 the old cut rejected. The threshold stays as a
+reported reference point, never as a filter that ranks. Implementing that in
+`triage_candidates` is the one pending item; the measurement and the decision are
+recorded here.
 
 ### Six method errors these runs produced
 
