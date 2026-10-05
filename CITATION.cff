@@ -1,0 +1,28 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+type: software
+title: "chemdisco"
+abstract: >-
+  An auditable computational drug-discovery pipeline: curated public bioactivity
+  data, QSAR with honest validation, and fragment-based candidate generation, in
+  which every reported quantity carries its provenance and a check that cannot
+  discriminate is withheld rather than reported.
+authors:
+  # Only a given name is recorded anywhere in this repository (LICENSE,
+  # pyproject.toml and every commit), so only a given name is claimed here.
+  # Add family-names and orcid before archiving if you want them in the DOI
+  # record -- a citation file is the wrong place to guess.
+  - given-names: Fabio
+    # family-names: ""
+    # orcid: "https://orcid.org/0000-0000-0000-0000"
+license: MIT
+repository-code: "https://github.com/fasn98/chemdisco"
+keywords:
+  - reproducibility
+  - provenance
+  - drug discovery
+  - molecular docking
+  - QSAR
+  - cheminformatics
+# Added by Zenodo after the first release is archived.
+# doi: ""

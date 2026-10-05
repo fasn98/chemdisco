@@ -692,6 +692,43 @@ Stated here so it does not have to be inferred:
   on extrapolations; it cannot resolve the conflict, and neither can anything
   else.
 
+## Licences and data
+
+**The code and the data here are under different licences, and the difference
+has teeth.**
+
+- **Code** — MIT. See [`LICENSE`](LICENSE).
+- **Derived data under `runs/`** — **CC BY-SA 3.0**, inherited from ChEMBL.
+  Those artefacts hold quantities computed from ChEMBL records, so redistributing
+  them requires attributing ChEMBL and **keeping them share-alike**. They cannot
+  be relicensed under MIT by virtue of living in an MIT repository.
+- **PDB structures** (4FRS, and 7MYI / 6UWP / 6EQM / 4L7G for cross-docking) —
+  CC0, fetched at run time and not redistributed here. Cite the entries.
+- **PAINS/Brenk catalogues and SAscore** — shipped with RDKit, BSD-3-Clause.
+
+Full detail, including what the share-alike term reaches: **[`DATA_LICENSE.md`](DATA_LICENSE.md)**.
+
+If you are only using the code, MIT is all that applies. If you are using the
+measurements in `runs/`, read the share-alike term.
+
+## How to cite
+
+Citation metadata is in [`CITATION.cff`](CITATION.cff), which GitHub renders as a
+"Cite this repository" button and most reference managers read directly.
+
+A Zenodo DOI will be minted from the first archived release and added to
+`CITATION.cff` and `.zenodo.json`; until then, cite the repository and the commit
+or tag you used.
+
+**What this is honest about being.** The claim here is *verified reproduction and
+provenance enforced by construction* — a prior run reproduced on different
+hardware down to its ligand and curation signatures, with every reported quantity
+carrying its origin and checks that cannot discriminate withheld rather than
+reported. It is **not** a discovery: the shortlist is unranked, the triage is
+withheld, cross-docking shows the poses are unreliable, and nothing here has been
+synthesised or assayed. Cite it as a method and a record, not as a result about
+BACE1.
+
 ## Licence
 
 MIT.
