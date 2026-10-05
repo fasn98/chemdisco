@@ -4,7 +4,10 @@
   "license": "MIT",
   "description": "<p>A computational drug-discovery pipeline whose output is its own audit trail. Curated ChEMBL bioactivity data, QSAR validated on scaffold splits against a random-split baseline, fragment-based generation constrained to a measured anchoring motif, and Vina docking used as a filter rather than a ranking.</p><p>Every quantity carries its origin (measured, derived, predicted or heuristic) and provenance degrades rather than upgrades through the pipeline. A check that cannot discriminate is withheld and says so: the triage threshold is reported, not applied, because no candidate cleared it by more than the docking method's own error. An empty or unranked result is reported as a result.</p><p>What the archived runs establish: cross-machine reproduction of a prior run's ligand and curation signatures, and one conclusion reached by three independent routes (redocking, enrichment at doubled search effort, and a 5x5 cross-docking matrix) that on this target the limit is the scoring function rather than the sampling. This is verified reproduction and enforced provenance. It is not a discovery.</p><p>Code is MIT. Derived data under runs/ inherits ChEMBL's CC BY-SA 3.0 -- see DATA_LICENSE.md.</p>",
   "creators": [
-    {"name": "Fabio"}
+    {
+      "name": "Sales Nogueira, Fabio Augusto",
+      "orcid": "0009-0001-9303-8707"
+    }
   ],
   "keywords": [
     "reproducibility",

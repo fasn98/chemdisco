@@ -8,13 +8,9 @@ abstract: >-
   which every reported quantity carries its provenance and a check that cannot
   discriminate is withheld rather than reported.
 authors:
-  # Only a given name is recorded anywhere in this repository (LICENSE,
-  # pyproject.toml and every commit), so only a given name is claimed here.
-  # Add family-names and orcid before archiving if you want them in the DOI
-  # record -- a citation file is the wrong place to guess.
-  - given-names: Fabio
-    # family-names: ""
-    # orcid: "https://orcid.org/0000-0000-0000-0000"
+  - given-names: Fabio Augusto
+    family-names: Sales Nogueira
+    orcid: "https://orcid.org/0009-0001-9303-8707"
 license: MIT
 repository-code: "https://github.com/fasn98/chemdisco"
 keywords:

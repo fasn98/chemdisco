@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "An auditable computational drug-discovery pipeline: curated public bioactivity data, QSAR with honest validation, and fragment-based candidate generation."
 requires-python = ">=3.11"
 license = { text = "MIT" }
-authors = [{ name = "Fabio" }]
+authors = [{ name = "Fabio Augusto Sales Nogueira" }]
 readme = "README.md"
 keywords = ["cheminformatics", "qsar", "drug-discovery", "chembl", "rdkit"]
 
