@@ -1,0 +1,107 @@
+
+==============================================================================
+0. Toolchain
+==============================================================================
+Docking toolchain:
+  vina: present
+  meeko: present
+  obabel: present
+
+==============================================================================
+1. Curating BACE1 activity data
+==============================================================================
+8000 measurements in, 5091 curated points out, 2053 measurements rejected.
+     808 rejected by irreconcilable_replicates
+     520 rejected by potential_duplicate
+     414 rejected by censored_measurement
+     218 rejected by source_flagged_invalid
+      93 rejected by unconvertible_value
+
+ChEMBL release: ChEMBL_37
+
+==============================================================================
+2. Splitting into actives and a decoy pool by potency
+==============================================================================
+  actives: 20 compounds at pIC50 >= 8.0
+  decoy pool: 1000 compounds at pIC50 <= 5.5
+
+  Note: these decoys are measured weak binders against this target, not presumed inactives. That removes any contamination from untested binders, but makes a harder control than a property-matched library -- weak binders often share the actives' chemotype. Enrichment here will read lower than a published DUD-E figure, which is the honest direction.
+
+==============================================================================
+3. Matching decoys to actives on properties
+==============================================================================
+  descriptors computed for 20 actives, 1000 pool
+39 decoys selected of 60 requested
+  mean |active - decoy| per property:
+    formal_charge: 0.00
+    hba: 0.87
+    hbd: 0.31
+    logp: 0.44
+    molecular_weight: 11.95
+    rotatable_bonds: 1.18
+  highest active-decoy similarity used: 0.244
+  candidates rejected:
+       327 by similarity above 0.25
+         1 by too few matches for active 2
+         1 by too few matches for active 5
+         1 by too few matches for active 6
+         1 by too few matches for active 7
+         1 by too few matches for active 10
+         1 by too few matches for active 11
+         1 by too few matches for active 15
+         1 by too few matches for active 16
+         1 by too few matches for active 17
+         1 by too few matches for active 19
+
+Balancing removed 5 of 39 decoys, leaving 34. The group-level property gap is now within tolerance on every property.
+
+Property gap (active mean - decoy mean):
+  formal_charge: +0.00
+  hba: +0.80
+  hbd: +0.21
+  logp: -0.04
+  molecular_weight: +24.24
+  rotatable_bonds: -0.05
+  The groups are matched on every property, so enrichment cannot be attributed to size or lipophilicity.
+
+==============================================================================
+4. Preparing the 4FRS receptor
+==============================================================================
+Box centred at (25.50, 10.84, 21.88), size 26.3 x 21.1 x 22.1 A (12322 A^3)
+  derived from: co-crystallised ligand 0V6_A_501
+  evidence: 25 heavy atoms of 0V6 observed bound in the crystal structure
+  prepared with openbabel
+
+==============================================================================
+5. Docking actives and decoys into the same receptor and box
+==============================================================================
+  54 ligands at exhaustiveness 8, interleaved, budget 10800s
+    25/54
+    50/54
+    54/54
+
+Screened 54 ligand(s) against 4FRS in 3801s (70.4s each)
+  53 docked, 1 failed
+        1 TypeError
+  failure rate by group: actives 0.0%, decoys 2.9%
+
+==============================================================================
+6. Did the score separate them?
+==============================================================================
+20 actives against 33 property-matched decoys
+  AUC-ROC  0.806 [0.681, 0.921]   (0.5 = random)
+  EF 1%    0.00   (1.0 = random, ceiling 2.6)
+  EF 5%    1.77
+  BEDROC   0.536
+
+  VERDICT: AUC 0.806 is strong for docking. The score carries real information about this site, though ranking within the top of the list remains unreliable -- see the pose-ranking result in the docking module.
+  Note: the top 1% is 1 compound(s), so EF1% here moves by a large factor on a single result. Read the AUC interval instead.
+
+  mean score: actives -9.10, decoys -8.04 kcal/mol (difference -1.06)
+
+==============================================================================
+Verdict
+==============================================================================
+Docking separates actives from matched decoys on BACE1 (AUC 0.806 [0.681, 0.921]). It can be used to discard candidates that clearly do not fit the pocket -- as a filter against the actives' score distribution, not as a ranking.
+
+Elapsed: 3848s
