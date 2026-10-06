@@ -20,5 +20,7 @@ keywords:
   - molecular docking
   - QSAR
   - cheminformatics
-# Added by Zenodo after the first release is archived.
-# doi: ""
+# Zenodo concept DOI: resolves to the latest archived version. The
+# version-specific DOI for v0.1.0 itself is one higher, should an exact
+# snapshot ever need citing.
+doi: 10.5281/zenodo.23177374

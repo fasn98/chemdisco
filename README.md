@@ -1,5 +1,7 @@
 # chemdisco
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23177374.svg)](https://doi.org/10.5281/zenodo.23177374)
+
 An auditable computational drug-discovery pipeline: curated public bioactivity
 data, QSAR models whose reported performance means something, and fragment-based
 candidate generation that is honest about its reach.
